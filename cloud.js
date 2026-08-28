@@ -12,7 +12,7 @@ window.Cloud = (function () {
 
   // ⚠ PASTE your Google OAuth "Web application" client ID here to enable Google login.
   // Leave '' to hide the Google button and use email + master password only.
-  const GOOGLE_CLIENT_ID = '';
+  const GOOGLE_CLIENT_ID = '810175232038-9l21f97519ecgodens8rgnun30a2ek9g.apps.googleusercontent.com';
 
   const KDF_ITER = 600000;
 
