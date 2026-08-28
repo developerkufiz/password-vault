@@ -1,12 +1,18 @@
 import mysql from 'mysql2/promise';
 
-export const pool = mysql.createPool({
+const base = {
   host: process.env.TIDB_HOST,
   port: Number(process.env.TIDB_PORT || 4000),
   user: process.env.TIDB_USER,
   password: process.env.TIDB_PASSWORD,
-  database: process.env.TIDB_DATABASE,
   ssl: { minVersion: 'TLSv1.2', rejectUnauthorized: true }, // TiDB Cloud requires TLS
+};
+
+const DB = (process.env.TIDB_DATABASE || 'passwordvault').replace(/`/g, '');
+
+export const pool = mysql.createPool({
+  ...base,
+  database: DB,
   waitForConnections: true,
   connectionLimit: 5,
   maxIdle: 5,
@@ -15,6 +21,11 @@ export const pool = mysql.createPool({
 });
 
 export async function initSchema() {
+  // Bootstrap: create the database first (the pool above can't connect until it exists).
+  const boot = await mysql.createConnection(base);
+  await boot.query('CREATE DATABASE IF NOT EXISTS `' + DB + '`');
+  await boot.end();
+
   await pool.query(`
     CREATE TABLE IF NOT EXISTS users (
       id             BIGINT PRIMARY KEY AUTO_INCREMENT,
