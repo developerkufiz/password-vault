@@ -108,6 +108,30 @@ to force it.
 
 ---
 
+## Sign in with Google (alternative to master password)
+
+The extension also has a **Sign in with Google** button. Setup:
+
+1. https://console.cloud.google.com → create a project.
+2. **APIs & Services → OAuth consent screen** → External → fill app name +
+   your email → add your Gmail as a test user.
+3. **Credentials → Create Credentials → OAuth client ID → Web application**.
+   Authorized redirect URI:
+   `https://lapfpjnljamfbljfimlokofnhgpakjhc.chromiumapp.org/`
+4. Copy the Client ID into:
+   - `cloud.js` → `GOOGLE_CLIENT_ID`
+   - Render → env var `GOOGLE_CLIENT_ID` (redeploy)
+
+**Trade-off:** Google-login accounts have their encryption key stored on the
+server (so a new laptop can restore with just Google). The server *can*
+technically read those vaults. Email + master-password accounts stay
+zero-knowledge. Pick per account — you can't mix both on one account.
+
+The `key` field in `manifest.json` pins the extension to a fixed ID
+(`lapfpjnljamfbljfimlokofnhgpakjhc`) so Google login's redirect URI works on
+every machine. The signing key is in `.ext-signing-key.pem` (gitignored) —
+keep it if you plan to publish to the Chrome Web Store.
+
 ## How the security works
 
 - Master password → PBKDF2 (600k iterations) → two independent keys:
