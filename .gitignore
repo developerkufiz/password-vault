@@ -4,3 +4,5 @@ node_modules/
 .DS_Store
 .ext-signing-key.pem
 password-vault-store.zip
+store-screenshot-1280x800.png
+promo.html
