@@ -195,6 +195,8 @@ function bindEvents() {
   const llInp = document.getElementById('localLockInput');
   if (llBtn) llBtn.addEventListener('click', unlockLocal);
   if (llInp) llInp.addEventListener('keydown', e => { if (e.key === 'Enter') unlockLocal(); });
+  document.querySelectorAll('[data-href]').forEach(a =>
+    a.addEventListener('click', () => chrome.tabs.create({ url: a.dataset.href })));
 
   // PIN modal
   document.getElementById('pinModalClose').addEventListener('click', closePinModal);
@@ -1168,8 +1170,13 @@ function checkStrength(pw, fillId, textId) {
   const cfg = {0:{w:'0%',c:'transparent',t:'—'},1:{w:'25%',c:'#ff4060',t:'WEAK'},2:{w:'50%',c:'#ffb020',t:'FAIR'},3:{w:'75%',c:'#00b4ff',t:'STRONG'},4:{w:'100%',c:'#00cc6a',t:'EXCELLENT'}};
   const c = cfg[lvl];
   const fill = document.getElementById(fillId), text = document.getElementById(textId);
-  if (fill) { fill.style.width=c.w; fill.style.background=c.c; }
-  if (text) { text.textContent=c.t; text.style.color=c.c; }
+  const show = pw.length > 0;
+  if (fill) {
+    fill.style.width=c.w; fill.style.background=c.c;
+    const bar = fill.parentElement;
+    if (bar) bar.style.display = show ? '' : 'none';
+  }
+  if (text) { text.textContent=c.t; text.style.color=c.c; text.style.display = show ? '' : 'none'; }
 }
 
 function getStrengthLevel(pw) {

@@ -424,6 +424,11 @@
   .health-tag.weak{background:rgba(255,64,96,.12);color:var(--danger);}
   .health-tag.reused{background:rgba(255,176,32,.12);color:var(--warn);}
   .health-tag.old{background:rgba(0,180,255,.12);color:var(--accent2);}
+  .about-box{display:flex;flex-direction:column;gap:7px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:10px 12px;}
+  .about-by{font-size:10px;color:var(--text2);}
+  .about-by b{color:var(--text1);}
+  .about-link{display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--accent);cursor:pointer;width:fit-content;text-decoration:none;}
+  .about-link:hover{color:var(--accent2);}
 
   .action-group{display:flex;flex-direction:column;gap:6px;margin-top:12px;}
 
@@ -647,8 +652,12 @@
       <button class="pw-gen" id="genPwBtn" title="Generate strong password" type="button">🎲</button>
       <button class="pw-eye" id="pwToggleBtn" type="button">👁</button>
     </div>
-    <div class="strength-bar"><div class="strength-fill" id="strengthFill"></div></div>
-    <div class="strength-text" id="strengthText">—</div>
+    <div class="strength-bar" style="display:none"><div class="strength-fill" id="strengthFill"></div></div>
+    <div class="strength-text" id="strengthText" style="display:none">—</div>
+  </div>
+  <div class="field">
+    <div class="field-label"><span class="acc">//</span> Folder</div>
+    <select class="fld-select" id="addFolder"></select>
   </div>
   </div><!-- /sub-main -->
 
@@ -660,10 +669,6 @@
   <div class="field">
     <div class="field-label"><span class="acc">//</span> 2FA / TOTP secret (optional)</div>
     <input type="text" id="addTotp" placeholder="base32 secret from the site's authenticator setup" autocomplete="off" spellcheck="false">
-  </div>
-  <div class="field">
-    <div class="field-label"><span class="acc">//</span> Folder</div>
-    <select class="fld-select" id="addFolder"></select>
   </div>
 
   <div class="section-title" style="margin-top:4px">
@@ -822,6 +827,15 @@
   <div class="action-group">
     <button class="btn btn-sm" id="downloadDocsBtn" style="width:100%;color:var(--accent2);border-color:rgba(0,180,255,.3)">📄 Download User Guide (.docx)</button>
   </div>
+
+  <div class="section-title" style="margin-top:12px">About</div>
+  <div class="about-box">
+    <div class="about-by">Built by <b>Tengku Syafiz</b></div>
+    <a class="about-link" data-href="https://www.instagram.com/tengkusyafiz/" id="aboutInstagram">
+      <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M12 2.2c3.2 0 3.6 0 4.9.1 1.2.1 1.8.2 2.2.4.6.2 1 .5 1.4.9.4.4.7.8.9 1.4.2.4.4 1 .4 2.2.1 1.3.1 1.7.1 4.9s0 3.6-.1 4.9c-.1 1.2-.2 1.8-.4 2.2-.2.6-.5 1-.9 1.4-.4.4-.8.7-1.4.9-.4.2-1 .4-2.2.4-1.3.1-1.7.1-4.9.1s-3.6 0-4.9-.1c-1.2-.1-1.8-.2-2.2-.4-.6-.2-1-.5-1.4-.9-.4-.4-.7-.8-.9-1.4-.2-.4-.4-1-.4-2.2C2.2 15.6 2.2 15.2 2.2 12s0-3.6.1-4.9c.1-1.2.2-1.8.4-2.2.2-.6.5-1 .9-1.4.4-.4.8-.7 1.4-.9.4-.2 1-.4 2.2-.4C8.4 2.2 8.8 2.2 12 2.2zm0 1.8c-3.1 0-3.5 0-4.7.1-1.1.1-1.7.2-2.1.4-.5.2-.9.4-1.3.8-.4.4-.6.8-.8 1.3-.2.4-.3 1-.4 2.1-.1 1.2-.1 1.6-.1 4.7s0 3.5.1 4.7c.1 1.1.2 1.7.4 2.1.2.5.4.9.8 1.3.4.4.8.6 1.3.8.4.2 1 .3 2.1.4 1.2.1 1.6.1 4.7.1s3.5 0 4.7-.1c1.1-.1 1.7-.2 2.1-.4.5-.2.9-.4 1.3-.8.4-.4.6-.8.8-1.3.2-.4.3-1 .4-2.1.1-1.2.1-1.6.1-4.7s0-3.5-.1-4.7c-.1-1.1-.2-1.7-.4-2.1-.2-.5-.4-.9-.8-1.3-.4-.4-.8-.6-1.3-.8-.4-.2-1-.3-2.1-.4-1.2-.1-1.6-.1-4.7-.1zm0 3.1a4.9 4.9 0 110 9.8 4.9 4.9 0 010-9.8zm0 8.1a3.2 3.2 0 100-6.4 3.2 3.2 0 000 6.4zm6.2-8.3a1.15 1.15 0 11-2.3 0 1.15 1.15 0 012.3 0z"/></svg>
+      @tengkusyafiz
+    </a>
+  </div>
 </div>
 
 <!-- PIN PROMPT MODAL -->
@@ -868,8 +882,8 @@
           <input type="password" id="editPassword" placeholder="••••••••••••">
           <button class="pw-eye" id="editPwEye" title="Reveal password (requires Master PIN)">🔒</button>
         </div>
-        <div class="strength-bar"><div class="strength-fill" id="editStrengthFill"></div></div>
-        <div class="strength-text" id="editStrengthText">—</div>
+        <div class="strength-bar" style="display:none"><div class="strength-fill" id="editStrengthFill"></div></div>
+        <div class="strength-text" id="editStrengthText" style="display:none">—</div>
       </div>
       <div class="field"><div class="field-label"><span class="acc">//</span> Notes</div><input type="text" id="editNotes" placeholder="Notes..."></div>
       <div class="field"><div class="field-label"><span class="acc">//</span> 2FA / TOTP secret</div><input type="text" id="editTotp" placeholder="base32 secret" autocomplete="off" spellcheck="false"></div>
