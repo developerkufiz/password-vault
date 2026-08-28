@@ -112,7 +112,16 @@ function bindEvents() {
   const pwBtn = document.getElementById('pwToggleBtn');
   pwBtn.addEventListener('click', () => togglePw('addPassword', pwBtn));
   document.getElementById('addPassword').addEventListener('input', e => checkStrength(e.target.value, 'strengthFill', 'strengthText'));
+  document.getElementById('genPwBtn').addEventListener('click', () => {
+    const inp = document.getElementById('addPassword');
+    inp.value = generatePassword(20);
+    inp.type = 'text';
+    document.getElementById('pwToggleBtn').textContent = '🙈';
+    checkStrength(inp.value, 'strengthFill', 'strengthText');
+  });
   document.getElementById('helpToggle').addEventListener('click', () => document.getElementById('helpBox').classList.toggle('open'));
+  const openShortcuts = document.getElementById('openShortcuts');
+  if (openShortcuts) openShortcuts.addEventListener('click', () => chrome.tabs.create({ url: 'chrome://extensions/shortcuts' }));
   document.getElementById('addExtraFieldBtn').addEventListener('click', () => addExtraFieldRow('addExtraList'));
 
   // Settings
@@ -1036,6 +1045,22 @@ function getStrengthLevel(pw) {
   if (/[A-Z]/.test(pw)&&/[a-z]/.test(pw)) s++;
   if (/[0-9]/.test(pw)) s++; if (/[^A-Za-z0-9]/.test(pw)) s++;
   return Math.min(4,s);
+}
+
+function generatePassword(len = 20) {
+  const lower = 'abcdefghijkmnpqrstuvwxyz';
+  const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+  const digit = '23456789';
+  const sym   = '!@#$%^&*-_=+?';
+  const all   = lower + upper + digit + sym;
+  const pick  = set => set[crypto.getRandomValues(new Uint32Array(1))[0] % set.length];
+  const out   = [pick(lower), pick(upper), pick(digit), pick(sym)];
+  while (out.length < len) out.push(pick(all));
+  for (let i = out.length - 1; i > 0; i--) {                 // Fisher–Yates shuffle
+    const j = crypto.getRandomValues(new Uint32Array(1))[0] % (i + 1);
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out.join('');
 }
 
 function togglePw(inputId, btn) {

@@ -86,6 +86,46 @@ function fillChosenAccount(entry, tabId, tabUrl, settings, attempts) {
   }).catch(() => {});
 }
 
+// ── KEYBOARD SHORTCUT — fill the current page on demand ───────────
+// Default: Ctrl+Shift+L (Cmd+Shift+L on Mac). Rebind at chrome://extensions/shortcuts
+chrome.commands.onCommand.addListener(command => {
+  if (command !== 'fill-login') return;
+  chrome.tabs.query({ active: true, currentWindow: true }, tabs => {
+    const tab = tabs[0];
+    if (!tab || !tab.url || tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://')) return;
+
+    chrome.storage.local.get(['vault','settings','attempts'], result => {
+      const entries  = result.vault    || [];
+      const settings = result.settings || {};
+      const attempts = result.attempts || {};
+      const max      = settings.maxAttempts || 5;
+
+      const key = urlKey(tab.url);
+      if ((attempts[key] || { count: 0 }).count >= max) {
+        console.warn('[PWD Vault] shortcut: page is locked out');
+        return;
+      }
+
+      // Manual trigger ignores the autofill toggle — the user asked for it explicitly
+      const eligible = entries.filter(e => urlMatches(e.url, tab.url));
+      console.log('[PWD Vault] shortcut →', eligible.length, 'credential(s)');
+      if (!eligible.length) return;
+
+      if (eligible.length === 1) {
+        fillChosenAccount(eligible[0], tab.id, tab.url, settings, attempts);
+        return;
+      }
+      const exact = entry => { try { return new URL(entry.url).pathname === new URL(tab.url).pathname ? 0 : 1; } catch { return 1; } };
+      const last  = entry => entry.lastLogin ? new Date(entry.lastLogin).getTime() : 0;
+      const accounts = eligible
+        .slice()
+        .sort((a, b) => (exact(a) - exact(b)) || (last(b) - last(a)) || a.username.localeCompare(b.username))
+        .map(e => ({ id: e.id, username: e.username, label: e.label || e.url, lastLogin: e.lastLogin || null }));
+      sendAccountPicker(tab.id, accounts, key);
+    });
+  });
+});
+
 // ── MESSAGE HANDLERS ──────────────────────────────────────────────
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
