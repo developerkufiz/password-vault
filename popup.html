@@ -769,6 +769,10 @@
       <button class="btn btn-sm" id="resetWithRecoveryBtn" style="font-size:9px;padding:5px 9px">↺ Use code</button>
     </div>
   </div>
+  <div class="setting-row">
+    <div class="setting-info"><div class="setting-name">Encrypt local vault</div><div class="setting-desc">Store passwords as ciphertext on this device, unlocked by a passphrase. Downloads a backup first. Auto-fill works only while unlocked.</div></div>
+    <label class="toggle"><input type="checkbox" id="toggleEncLocal"><span class="slider"></span></label>
+  </div>
 
   <div class="section-title" style="margin-top:12px">Folders</div>
   <div id="folderManager" class="folder-manager"></div>
@@ -924,6 +928,17 @@
     </div>
     <div class="history-list" id="historyList"></div>
   </div>
+</div>
+
+<!-- LOCAL ENCRYPTION LOCK SCREEN -->
+<div id="localLockScreen" style="display:none;position:fixed;inset:0;z-index:10050;background:var(--bg1);flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:28px;">
+  <div style="font-size:28px">🔒</div>
+  <div style="font-family:var(--font-mono);font-size:12px;letter-spacing:2px;color:var(--text1)">VAULT LOCKED</div>
+  <div style="font-size:10px;color:var(--text2);text-align:center;max-width:220px">Enter your vault passphrase to decrypt this device's data.</div>
+  <input type="password" id="localLockInput" placeholder="passphrase" autocomplete="current-password"
+    style="width:220px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:9px 11px;font-size:13px;color:var(--text1);outline:none;">
+  <div id="localLockError" style="font-size:9px;color:var(--danger);letter-spacing:1px;min-height:12px"></div>
+  <button class="btn btn-primary" id="localLockBtn" style="width:220px">Unlock</button>
 </div>
 
 <!-- TOAST -->

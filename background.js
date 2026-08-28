@@ -6,8 +6,9 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (changeInfo.status !== 'complete' || !tab.url) return;
   if (tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://')) return;
 
-  chrome.storage.local.get(['vault','settings','attempts'], result => {
-    const entries  = result.vault    || [];
+  chrome.storage.local.get(['settings','attempts'], result => {
+   readVault((entries) => {
+    if (!entries) { console.log('[PWD Vault] local vault is locked — open the popup to unlock'); return; }
     const settings = result.settings || {};
     const attempts = result.attempts || {};
     const max      = settings.maxAttempts || 5;
@@ -52,6 +53,7 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
       .map(e => ({ id: e.id, username: e.username, label: e.label || e.url, lastLogin: e.lastLogin || null }));
     // Same delay as the fill path + retry — content script may not be listening yet
     setTimeout(() => sendAccountPicker(tabId, accounts, key), 900);
+   });
   });
 });
 
@@ -111,8 +113,9 @@ chrome.commands.onCommand.addListener(command => {
     const tab = tabs[0];
     if (!tab || !tab.url || tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://')) return;
 
-    chrome.storage.local.get(['vault','settings','attempts'], result => {
-      const entries  = result.vault    || [];
+    chrome.storage.local.get(['settings','attempts'], result => {
+     readVault((entries) => {
+      if (!entries) { console.warn('[PWD Vault] shortcut: local vault is locked'); return; }
       const settings = result.settings || {};
       const attempts = result.attempts || {};
       const max      = settings.maxAttempts || 5;
@@ -139,6 +142,7 @@ chrome.commands.onCommand.addListener(command => {
         .sort((a, b) => (exact(a) - exact(b)) || (last(b) - last(a)) || a.username.localeCompare(b.username))
         .map(e => ({ id: e.id, username: e.username, label: e.label || e.url, lastLogin: e.lastLogin || null }));
       sendAccountPicker(tab.id, accounts, key);
+     });
     });
   });
 });
@@ -148,18 +152,21 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
   // ── pickAccount — user chose an account in the on-page picker ────
   if (msg.action === 'pickAccount') {
-    chrome.storage.local.get(['vault','settings','attempts'], result => {
-      const entry = (result.vault || []).find(e => e.id === msg.entryId);
-      if (!entry || !sender.tab) return;
-      fillChosenAccount(entry, sender.tab.id, sender.tab.url, result.settings || {}, result.attempts || {});
+    chrome.storage.local.get(['settings','attempts'], result => {
+      readVault((entries) => {
+        const entry = (entries || []).find(e => e.id === msg.entryId);
+        if (!entry || !sender.tab) return;
+        fillChosenAccount(entry, sender.tab.id, sender.tab.url, result.settings || {}, result.attempts || {});
+      });
     });
     return true;
   }
 
   // ── checkAutofill ────────────────────────────────────────────────
   if (msg.action === 'checkAutofill') {
-    chrome.storage.local.get(['vault','settings','attempts'], result => {
-      const entries  = result.vault    || [];
+    chrome.storage.local.get(['settings','attempts'], result => {
+     readVault((entries) => {
+      if (!entries) { sendResponse({ match: null, locked: true }); return; }
       const settings = result.settings || {};
       const attempts = result.attempts || {};
       const max      = settings.maxAttempts || 5;
@@ -180,6 +187,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       }
       // Pass resolved settings so content.js uses the right autosubmit value
       sendResponse({ match, settings: { ...settings, autosubmit: resolvedAutosubmit }, urlKey: key, maxAttempts: max });
+     });
     });
     return true;
   }
@@ -187,8 +195,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   // ── reportAttempt — auto-fill history (single source of truth) ───
   if (msg.action === 'reportAttempt') {
     chrome.storage.local.get(['attempts','settings','vault'], result => {
+      const enc      = !!(result.settings && result.settings.encLocal && result.settings.encLocal.on);
       const attempts = result.attempts || {};
-      const entries  = result.vault    || [];
+      const entries  = enc ? [] : (result.vault || []);   // no history writes while encrypted
       const max      = (result.settings || {}).maxAttempts || 5;
       const key      = msg.urlKey;
       if (!key) return;
@@ -219,7 +228,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       }
 
       // Write ONE history entry
-      if (idx >= 0) {
+      if (!enc && idx >= 0) {
         const now  = new Date().toISOString();
         const hist = entries[idx].loginHistory || [];
         hist.push({ ts: now, status: msg.success ? 'success' : 'fail' });
@@ -236,7 +245,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
   // ── manualLoginSuccess — manual login history (capture watcher) ──
   if (msg.action === 'manualLoginSuccess') {
-    chrome.storage.local.get('vault', result => {
+    chrome.storage.local.get(['vault','settings'], result => {
+      if (result.settings && result.settings.encLocal && result.settings.encLocal.on) return; // no history while encrypted
       const entries = result.vault || [];
       const idx = entries.findIndex(e =>
         urlMatches(e.url, msg.url) && e.username === msg.username
@@ -266,6 +276,24 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 function urlKey(url) {
   try { const u = new URL(url); return u.origin + u.pathname; }
   catch { return url; }
+}
+
+function b64d(s) { return Uint8Array.from(atob(s), c => c.charCodeAt(0)); }
+
+// Resolve vault entries, decrypting if local encryption is on.
+// cb(entries | null, encrypted) — entries is null when encrypted and locked.
+function readVault(cb) {
+  chrome.storage.local.get(['vault', 'vault_enc', 'settings'], async r => {
+    const enc = !!(r.settings && r.settings.encLocal && r.settings.encLocal.on);
+    if (!enc) { cb(r.vault || [], false); return; }
+    try {
+      const s = await chrome.storage.session.get('pv_datakey');
+      if (!s.pv_datakey || !r.vault_enc) { cb(null, true); return; }
+      const key = await crypto.subtle.importKey('raw', b64d(s.pv_datakey), 'AES-GCM', false, ['decrypt']);
+      const pt  = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: b64d(r.vault_enc.iv) }, key, b64d(r.vault_enc.blob));
+      cb(JSON.parse(new TextDecoder().decode(pt)), true);
+    } catch { cb(null, true); }
+  });
 }
 
 function urlMatches(stored, current) {

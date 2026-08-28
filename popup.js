@@ -34,6 +34,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   prefillUrl();
   bindEvents();
   checkPendingCapture();
+  updateLocalLockUI();
   refreshTotps();
   setInterval(refreshTotps, 1000);
 
@@ -185,6 +186,15 @@ function bindEvents() {
   const resetRecBtn = document.getElementById('resetWithRecoveryBtn');
   if (genRecBtn)   genRecBtn.addEventListener('click', generateRecoveryCode);
   if (resetRecBtn) resetRecBtn.addEventListener('click', resetPinWithRecovery);
+  const encToggle = document.getElementById('toggleEncLocal');
+  if (encToggle) encToggle.addEventListener('change', e => {
+    if (e.target.checked) enableLocalEnc(); else disableLocalEnc();
+    setTimeout(applySettings, 50);
+  });
+  const llBtn = document.getElementById('localLockBtn');
+  const llInp = document.getElementById('localLockInput');
+  if (llBtn) llBtn.addEventListener('click', unlockLocal);
+  if (llInp) llInp.addEventListener('keydown', e => { if (e.key === 'Enter') unlockLocal(); });
 
   // PIN modal
   document.getElementById('pinModalClose').addEventListener('click', closePinModal);
@@ -384,21 +394,31 @@ function handleEntryClick(e) {
 }
 
 // ── DATA ───────────────────────────────────────────────────────────
+function chromeGet(keys)      { return new Promise(r => chrome.storage.local.get(keys, r)); }
+function chromeSet(obj)       { return new Promise(r => chrome.storage.local.set(obj, r)); }
+function chromeRemove(keys)   { return new Promise(r => chrome.storage.local.remove(keys, r)); }
+
 async function loadData() {
-  return new Promise(resolve => {
-    chrome.storage.local.get(['vault','settings','attempts','folders'], r => {
-      if (r.vault)    entries  = r.vault;
-      if (r.settings) settings = { ...settings, ...r.settings };
-      if (r.attempts) attempts = r.attempts;
-      if (Array.isArray(r.folders)) {
-        folders = r.folders;
-      } else {
-        folders = DEFAULT_FOLDERS.map(f => ({ ...f }));
-        chrome.storage.local.set({ folders });
-      }
-      resolve();
-    });
-  });
+  const r = await chromeGet(['vault','vault_enc','settings','attempts','folders']);
+  if (r.settings) settings = { ...settings, ...r.settings };
+  if (r.attempts) attempts = r.attempts;
+  if (Array.isArray(r.folders)) {
+    folders = r.folders;
+  } else {
+    folders = DEFAULT_FOLDERS.map(f => ({ ...f }));
+    chrome.storage.local.set({ folders });
+  }
+  if (encLocalOn()) {
+    await loadStashedDataKey();
+    if (_dataKey && r.vault_enc) {
+      try { entries = await aesDecrypt(_dataKey, r.vault_enc); }
+      catch { _dataKey = null; entries = []; }
+    } else {
+      entries = [];                 // locked — unlockLocal() fills entries
+    }
+  } else if (r.vault) {
+    entries = r.vault;
+  }
 }
 
 async function loadUnlockState() {
@@ -443,6 +463,14 @@ function lockNow(opts = {}) {
   const ep = document.getElementById('editPassword');
   if (ep && ep.type === 'text') { ep.type = 'password'; updatePinEyeIcon(); }
   if (window.Cloud && Cloud.lock && settings.lockCloud !== false) Cloud.lock();
+  if (encLocalOn()) {
+    _dataKey = null;
+    try { chrome.storage.session.remove('pv_datakey'); } catch {}
+    entries = [];
+    closeEditModal();
+    renderVault();
+    updateLocalLockUI();
+  }
   if (!opts.silent) showToast('🔒 Locked');
 }
 
@@ -465,7 +493,14 @@ function prefillUrl() {
   if (currentTab?.url) document.getElementById('addUrl').value = currentTab.url;
 }
 
-function persist() { chrome.storage.local.set({ vault: entries }); if (window.Cloud) Cloud.schedulePush(); }
+function persist() {
+  if (encLocalOn()) {
+    if (_dataKey) aesEncrypt(_dataKey, entries).then(rec => chrome.storage.local.set({ vault_enc: rec }));
+  } else {
+    chrome.storage.local.set({ vault: entries });
+  }
+  if (window.Cloud) Cloud.schedulePush();
+}
 function persistFolders() { chrome.storage.local.set({ folders }); if (window.Cloud) Cloud.schedulePush(); }
 
 // ── FOLDERS ────────────────────────────────────────────────────────
@@ -1231,6 +1266,104 @@ async function resetPinWithRecovery() {
   showToast('Master PIN removed — set a new one');
 }
 
+// ── LOCAL VAULT ENCRYPTION (opt-in, at rest) ─────────────────────
+let _dataKey = null;   // AES-GCM CryptoKey while unlocked; also cached in chrome.storage.session
+const _tenc = new TextEncoder();
+const _tdec = new TextDecoder();
+const _kb64e = b => btoa(String.fromCharCode(...new Uint8Array(b)));
+const _kb64d = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+
+function encLocalOn() { return !!(settings.encLocal && settings.encLocal.on); }
+
+async function deriveDataKey(pass, saltB64, iter) {
+  const base = await crypto.subtle.importKey('raw', _tenc.encode(pass), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey(
+    { name: 'PBKDF2', salt: _kb64d(saltB64), iterations: iter, hash: 'SHA-256' },
+    base, { name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt']);
+}
+async function aesEncrypt(key, obj) {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, _tenc.encode(JSON.stringify(obj)));
+  return { iv: _kb64e(iv), blob: _kb64e(ct) };
+}
+async function aesDecrypt(key, rec) {
+  const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: _kb64d(rec.iv) }, key, _kb64d(rec.blob));
+  return JSON.parse(_tdec.decode(pt));
+}
+async function stashDataKey() {
+  try {
+    const raw = await crypto.subtle.exportKey('raw', _dataKey);
+    await chrome.storage.session.set({ pv_datakey: _kb64e(raw) });
+  } catch {}
+}
+async function loadStashedDataKey() {
+  try {
+    const s = await chrome.storage.session.get('pv_datakey');
+    if (s.pv_datakey) _dataKey = await crypto.subtle.importKey('raw', _kb64d(s.pv_datakey), 'AES-GCM', true, ['encrypt', 'decrypt']);
+  } catch {}
+}
+
+function updateLocalLockUI() {
+  const ov = document.getElementById('localLockScreen');
+  if (ov) ov.style.display = (encLocalOn() && !_dataKey) ? 'flex' : 'none';
+}
+
+async function unlockLocal() {
+  const inp   = document.getElementById('localLockInput');
+  const errEl = document.getElementById('localLockError');
+  errEl.textContent = '';
+  try {
+    const cfg = settings.encLocal;
+    const key = await deriveDataKey(inp.value, cfg.salt, cfg.iter);
+    await aesDecrypt(key, cfg.check);                 // verify passphrase
+    _dataKey = key;
+    await stashDataKey();
+    const r = await chromeGet(['vault_enc']);
+    entries = r.vault_enc ? await aesDecrypt(_dataKey, r.vault_enc) : [];
+    inp.value = '';
+    markUnlocked();
+    updateLocalLockUI();
+    renderVault(); renderStats(); renderFolderManager(); refreshFolderSelects(); renderLockoutList();
+    showToast('Vault unlocked');
+  } catch { errEl.textContent = '✕ Incorrect passphrase'; }
+}
+
+async function enableLocalEnc() {
+  if (encLocalOn()) return;
+  if (!confirm('Encrypt the local vault?\n\nA vault.json backup will download first. If you forget the passphrase, the local data cannot be recovered without that backup.')) return;
+  doExport();
+  const p1 = prompt('Set a vault passphrase (min 8 characters). This is separate from your 6-digit PIN.');
+  if (p1 == null) return;
+  if (p1.length < 8) { showToast('Passphrase must be at least 8 characters', 'error'); return; }
+  if (prompt('Re-enter the passphrase:') !== p1) { showToast('Passphrases did not match', 'error'); return; }
+  const salt = _kb64e(crypto.getRandomValues(new Uint8Array(16)));
+  const iter = 600000;
+  _dataKey = await deriveDataKey(p1, salt, iter);
+  const check = await aesEncrypt(_dataKey, { ok: 1 });
+  settings.encLocal = { on: true, salt, iter, check };
+  await stashDataKey();
+  await chromeSet({ vault_enc: await aesEncrypt(_dataKey, entries), settings });
+  await chromeRemove('vault');
+  markUnlocked();
+  applySettings();
+  updateLocalLockUI();
+  showToast('✓ Local vault encrypted');
+}
+
+async function disableLocalEnc() {
+  if (!encLocalOn()) return;
+  if (!_dataKey) { showToast('Unlock the vault first', 'error'); return; }
+  if (!confirm('Turn off local encryption? Passwords will be stored in plain text on this device again.')) return;
+  delete settings.encLocal;
+  await chromeSet({ vault: entries, settings });
+  await chromeRemove('vault_enc');
+  _dataKey = null;
+  try { await chrome.storage.session.remove('pv_datakey'); } catch {}
+  applySettings();
+  updateLocalLockUI();
+  showToast('Local encryption turned off');
+}
+
 // ── SETTINGS ─────────────────────────────────────────────────────
 function applySettings() {
   document.getElementById('toggleAutofill').checked   = settings.autofill;
@@ -1248,6 +1381,8 @@ function applySettings() {
   if (activeArea) activeArea.style.display = hasPIN ? 'flex' : 'none';
   const recRow = document.getElementById('pinRecoveryRow');
   if (recRow) recRow.style.display = hasPIN ? 'flex' : 'none';
+  const encToggle = document.getElementById('toggleEncLocal');
+  if (encToggle) encToggle.checked = encLocalOn();
   if (!hasPIN) {
     const inp = document.getElementById('masterPinInput');
     if (inp) { inp.value = ''; inp.type = 'password'; }
