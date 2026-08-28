@@ -717,6 +717,13 @@
 
 <!-- SETTINGS PANEL -->
 <div class="panel" id="panel-settings">
+  <div class="subtabs">
+    <button class="subtab active" data-sub="general" type="button">General</button>
+    <button class="subtab" data-sub="security" type="button">Security</button>
+    <button class="subtab" data-sub="data" type="button">Data</button>
+  </div>
+
+  <div class="subpanel active" id="sub-general">
   <div class="section-title">Cloud Sync</div>
   <div id="cloudSync" style="margin-bottom:14px"></div>
 
@@ -754,8 +761,10 @@
   <div class="setting-row">
     <div class="setting-info"><div class="setting-name">Fill shortcut</div><div class="setting-desc">Press <b>Ctrl+Shift+L</b> to fill the current page. Rebind at <span id="openShortcuts" style="color:var(--accent);cursor:pointer;text-decoration:underline">chrome://extensions/shortcuts</span></div></div>
   </div>
+  </div><!-- /sub-general -->
 
-  <div class="section-title" style="margin-top:12px">Security</div>
+  <div class="subpanel" id="sub-security">
+  <div class="section-title">Security</div>
   <div class="setting-row">
     <div class="setting-info"><div class="setting-name">Auto-lock</div><div class="setting-desc">Re-ask Master PIN and lock cloud sync after N idle minutes (0 = never)</div></div>
     <div class="attempts-wrap">
@@ -800,12 +809,14 @@
     <label class="toggle"><input type="checkbox" id="toggleEncLocal"><span class="slider"></span></label>
   </div>
 
-  <div class="section-title" style="margin-top:12px">Folders</div>
-  <div id="folderManager" class="folder-manager"></div>
-  <button class="btn-add-field" id="addFolderBtn" style="margin-bottom:4px">+ Add Folder</button>
-
   <div class="section-title" style="margin-top:12px">Lockout Status</div>
   <div id="lockoutList" class="lockout-list"><div class="lockout-empty">No lockouts active</div></div>
+  </div><!-- /sub-security -->
+
+  <div class="subpanel" id="sub-data">
+  <div class="section-title">Folders</div>
+  <div id="folderManager" class="folder-manager"></div>
+  <button class="btn-add-field" id="addFolderBtn" style="margin-bottom:4px">+ Add Folder</button>
 
   <div class="section-title" style="margin-top:12px">Password Health</div>
   <div id="healthReport" class="lockout-list"><div class="lockout-empty">Tap Scan to check for weak, reused or old passwords</div></div>
@@ -836,6 +847,7 @@
       @tengkusyafiz
     </a>
   </div>
+  </div><!-- /sub-data -->
 </div>
 
 <!-- PIN PROMPT MODAL -->

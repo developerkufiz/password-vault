@@ -605,10 +605,11 @@ function setupTabs() {
 
   document.querySelectorAll('.subtab').forEach(btn => {
     btn.addEventListener('click', () => {
-      document.querySelectorAll('.subtab').forEach(t => t.classList.remove('active'));
-      document.querySelectorAll('.subpanel').forEach(p => p.classList.remove('active'));
+      const panel = btn.closest('.panel');
+      panel.querySelectorAll('.subtab').forEach(t => t.classList.remove('active'));
+      panel.querySelectorAll('.subpanel').forEach(p => p.classList.remove('active'));
       btn.classList.add('active');
-      document.getElementById('sub-' + btn.dataset.sub).classList.add('active');
+      panel.querySelector('#sub-' + btn.dataset.sub).classList.add('active');
     });
   });
 }
