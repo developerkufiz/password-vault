@@ -1,7 +1,9 @@
 // ── STATE ──────────────────────────────────────────────────────────
 let entries  = [];
-let settings = { autofill:true, autosubmit:false, notify:true, maxAttempts:5, capture:true, theme:'dark', sortDir:'asc' };
+let settings = { autofill:true, autosubmit:false, notify:true, maxAttempts:5, capture:true, theme:'dark', sortDir:'asc', autoLockMin:5 };
 let attempts = {};
+let _unlockAt = null;   // ms timestamp of last Master-PIN unlock (kept in chrome.storage.session)
+let _lastBump = 0;
 let currentTab = null;
 let pendingCapture = null;
 let folders = [];
@@ -15,6 +17,7 @@ const DEFAULT_FOLDERS = [
 // ── INIT ───────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
   await loadData();
+  await loadUnlockState();
   // Migrate: drop legacy drag-order
   if (settings.cardOrder) { delete settings.cardOrder; chrome.storage.local.set({ settings }); }
   await loadCurrentTab();
@@ -133,6 +136,22 @@ function bindEvents() {
     const v = Math.max(1, Math.min(99, parseInt(e.target.value)||5));
     e.target.value = v; saveSetting('maxAttempts', v);
   });
+  document.getElementById('autoLockInput').addEventListener('change', e => {
+    const v = Math.max(0, Math.min(120, parseInt(e.target.value) || 0));
+    e.target.value = v; saveSetting('autoLockMin', v);
+  });
+  document.getElementById('lockNowBtn').addEventListener('click', () => lockNow());
+  document.getElementById('healthScanBtn').addEventListener('click', () => gatePin(renderHealthReport));
+  document.getElementById('healthReport').addEventListener('click', e => {
+    const row = e.target.closest('.health-row');
+    if (row) { document.querySelector('.tab[data-tab="vault"]').click(); openEditModal(row.dataset.id); }
+  });
+  document.getElementById('importCsvBtn').addEventListener('click', () => document.getElementById('importCsvFile').click());
+  document.getElementById('importCsvFile').addEventListener('change', importCSV);
+  ['keydown','click'].forEach(ev => document.addEventListener(ev, bumpActivity, true));
+  setInterval(() => {
+    if (settings.masterPin && _unlockAt != null && !isUnlocked()) lockNow({ silent: true });
+  }, 10000);
   // Folders
   document.getElementById('addFolderBtn').addEventListener('click', addFolder);
   const fm = document.getElementById('folderManager');
@@ -220,7 +239,7 @@ function bindEvents() {
     // Toggle OFF = no protection → reveal freely
     const pinActive = settings.masterPin && pinToggle && pinToggle.checked;
     if (pinActive) {
-      openPinModal(() => {
+      gatePin(() => {
         inp.type = 'text';
         updatePinEyeIcon();
       });
@@ -336,7 +355,7 @@ function handleEntryClick(e) {
       // pinProtect OFF = copy freely
       const pinActive = settings.masterPin && (entry ? entry.pinProtect !== false : true);
       if (pinActive) {
-        openPinModal(() => copyField(value, label));
+        gatePin(() => copyField(value, label));
         return;
       }
     }
@@ -365,6 +384,51 @@ async function loadData() {
       resolve();
     });
   });
+}
+
+async function loadUnlockState() {
+  return new Promise(res => {
+    try {
+      chrome.storage.session.get('pv_unlock', r => {
+        _unlockAt = (r && r.pv_unlock && r.pv_unlock.at) || null;
+        res();
+      });
+    } catch { res(); }
+  });
+}
+
+// ── AUTO-LOCK ────────────────────────────────────────────────────
+function isUnlocked() {
+  if (!settings.masterPin) return true;
+  if (_unlockAt == null) return false;
+  const mins = settings.autoLockMin;
+  if (!mins || mins <= 0) return true;               // 0 = stay unlocked for the session
+  return (Date.now() - _unlockAt) < mins * 60000;
+}
+function markUnlocked() {
+  _unlockAt = Date.now();
+  try { chrome.storage.session.set({ pv_unlock: { at: _unlockAt } }); } catch {}
+}
+function bumpActivity() {
+  if (_unlockAt == null) return;                     // only extend an existing unlock
+  const now = Date.now();
+  _unlockAt = now;
+  if (now - _lastBump > 5000) {
+    _lastBump = now;
+    try { chrome.storage.session.set({ pv_unlock: { at: now } }); } catch {}
+  }
+}
+function gatePin(cb) {
+  if (isUnlocked()) { bumpActivity(); cb(); }
+  else openPinModal(cb);
+}
+function lockNow(opts = {}) {
+  _unlockAt = null;
+  try { chrome.storage.session.remove('pv_unlock'); } catch {}
+  const ep = document.getElementById('editPassword');
+  if (ep && ep.type === 'text') { ep.type = 'password'; updatePinEyeIcon(); }
+  if (window.Cloud && Cloud.lock && settings.lockCloud !== false) Cloud.lock();
+  if (!opts.silent) showToast('🔒 Locked');
 }
 
 async function loadCurrentTab() {
@@ -1076,6 +1140,8 @@ function applySettings() {
   document.getElementById('toggleAutosubmit').checked = settings.autosubmit;
   document.getElementById('toggleNotify').checked     = settings.notify;
   document.getElementById('maxAttemptsInput').value   = settings.maxAttempts || 5;
+  const ali = document.getElementById('autoLockInput');
+  if (ali) ali.value = settings.autoLockMin ?? 5;
   // Master PIN — switch UI state
   const hasPIN = !!settings.masterPin;
   const setupArea  = document.getElementById('pinSetupArea');
@@ -1108,7 +1174,7 @@ function downloadDocs() {
 function exportJSON() {
   // Always require PIN on export if master PIN is configured
   if (settings.masterPin) {
-    openPinModal(doExport);
+    gatePin(doExport);
   } else {
     doExport();
   }
@@ -1151,6 +1217,98 @@ function importJSON(event) {
   };
   reader.readAsText(file); event.target.value='';
 }
+// ── PASSWORD HEALTH ──────────────────────────────────────────────
+function renderHealthReport() {
+  const box = document.getElementById('healthReport');
+  if (!entries.length) { box.innerHTML = '<div class="lockout-empty">Vault is empty</div>'; return; }
+  const now = Date.now();
+  const counts = new Map();
+  entries.forEach(e => counts.set(e.password, (counts.get(e.password) || 0) + 1));
+  const rows = [];
+  entries.forEach(e => {
+    const issues = [];
+    const pw = e.password || '';
+    if (pw.length < 8 || getStrengthLevel(pw) < 2) issues.push('weak');
+    if (pw && counts.get(pw) > 1) issues.push('reused');
+    const ref = e.updated || e.created;
+    if (ref && (now - new Date(ref).getTime()) > 365 * 864e5) issues.push('old');
+    if (issues.length) rows.push({ e, issues });
+  });
+  if (!rows.length) {
+    box.innerHTML = '<div class="lockout-empty" style="color:var(--success)">✓ All passwords look healthy</div>';
+    return;
+  }
+  box.innerHTML = rows.map(({ e, issues }) => `
+    <div class="health-row" data-id="${escAttr(e.id)}">
+      <div class="health-label">${escHtml(e.label || e.url || e.username)}</div>
+      <div class="health-tags">${issues.map(i => `<span class="health-tag ${i}">${i}</span>`).join('')}</div>
+    </div>`).join('');
+}
+
+// ── CSV IMPORT ───────────────────────────────────────────────────
+function parseCSV(text) {
+  const rows = []; let row = [], cur = '', q = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (q) {
+      if (c === '"') { if (text[i + 1] === '"') { cur += '"'; i++; } else q = false; }
+      else cur += c;
+    } else if (c === '"') { q = true; }
+    else if (c === ',') { row.push(cur); cur = ''; }
+    else if (c === '\n') { row.push(cur); rows.push(row); row = []; cur = ''; }
+    else if (c !== '\r') cur += c;
+  }
+  if (cur.length || row.length) { row.push(cur); rows.push(row); }
+  return rows.filter(r => r.some(x => x !== ''));
+}
+
+function importCSV(event) {
+  const file = event.target.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const rows = parseCSV(e.target.result);
+      if (rows.length < 2) throw new Error('empty');
+      const header = rows[0].map(h => h.trim().toLowerCase());
+      const find = (...names) => header.findIndex(h => names.some(n => h === n || h.includes(n)));
+      const iUrl  = find('url', 'uri', 'website', 'login_uri', 'address');
+      const iUser = find('username', 'user', 'login_username', 'login', 'email', 'account');
+      const iPass = find('password', 'login_password', 'pwd', 'pass');
+      const iName = find('name', 'title', 'label', 'item');
+      const iNote = find('note', 'notes', 'comment');
+      if (iUser < 0 || iPass < 0) throw new Error('columns');
+      const dup = new Set(entries.map(x => `${x.url} :: ${x.username} :: ${x.password}`));
+      let added = 0;
+      rows.slice(1).forEach(r => {
+        const url  = (iUrl  >= 0 ? r[iUrl]  : '') || '';
+        const user = (iUser >= 0 ? r[iUser] : '') || '';
+        const pass = (iPass >= 0 ? r[iPass] : '') || '';
+        if (!user || !pass) return;
+        const key = `${url} :: ${user} :: ${pass}`;
+        if (dup.has(key)) return;
+        dup.add(key);
+        entries.push({
+          id: Date.now().toString(36) + Math.random().toString(36).slice(2),
+          label: (iName >= 0 && r[iName]) ? r[iName] : (url ? extractDomain(url) : user),
+          url, username: user, password: pass,
+          notes: (iNote >= 0 ? r[iNote] : '') || '',
+          folderId: null,
+          selectors: { username: '', password: '', submit: '' },
+          extraFields: [],
+          strength: getStrengthLevel(pass),
+          created: new Date().toISOString(),
+          updated: new Date().toISOString()
+        });
+        added++;
+      });
+      persist(); renderVault(); renderStats(); renderFolderManager(); refreshFolderSelects();
+      showToast(`Imported ${added} from CSV`);
+    } catch { showToast('Could not read CSV', 'error'); }
+  };
+  reader.readAsText(file);
+  event.target.value = '';
+}
+
 function clearVault() {
   if(!confirm('⚠ Wipe entire vault?')) return;
   if (window.Cloud) Cloud.tombstoneAll(entries.map(e => e.id));
@@ -1310,6 +1468,7 @@ function confirmPin() {
   const entered = document.getElementById('pinInput').value;
   const errEl   = document.getElementById('pinError');
   if (entered === settings.masterPin) {
+    markUnlocked();
     const cb = _pinCallback;   // save BEFORE closing (closePinModal nulls it)
     closePinModal();
     if (cb) cb();              // now call it safely

@@ -86,6 +86,23 @@ function fillChosenAccount(entry, tabId, tabUrl, settings, attempts) {
   }).catch(() => {});
 }
 
+// ── AUTO-LOCK — clear the unlocked session even while the popup is closed ──
+chrome.alarms.create('pv-autolock', { periodInMinutes: 1 });
+chrome.alarms.onAlarm.addListener(a => {
+  if (a.name !== 'pv-autolock') return;
+  chrome.storage.session.get('pv_unlock', s => {
+    const at = s && s.pv_unlock && s.pv_unlock.at;
+    if (!at) return;
+    chrome.storage.local.get('settings', r => {
+      const mins = (r.settings || {}).autoLockMin;
+      if (!mins || mins <= 0) return;
+      if (Date.now() - at >= mins * 60000) {
+        chrome.storage.session.remove(['pv_unlock', 'cloud_encKey']);
+      }
+    });
+  });
+});
+
 // ── KEYBOARD SHORTCUT — fill the current page on demand ───────────
 // Default: Ctrl+Shift+L (Cmd+Shift+L on Mac). Rebind at chrome://extensions/shortcuts
 chrome.commands.onCommand.addListener(command => {

@@ -308,6 +308,13 @@ window.Cloud = (function () {
     await pull();
   }
 
+  // Lock: drop the in-memory key but stay signed in (used by the popup's auto-lock)
+  async function lock() {
+    encKey = null;
+    try { await chrome.storage.session.remove('cloud_encKey'); } catch {}
+    updateStatusUI();
+  }
+
   async function signOut() {
     encKey = null;
     await chrome.storage.session.remove('cloud_encKey');
@@ -445,5 +452,5 @@ window.Cloud = (function () {
     }
   }
 
-  return { init, schedulePush, tombstone, tombstoneAll, status, syncNow: () => push() };
+  return { init, schedulePush, tombstone, tombstoneAll, status, lock, syncNow: () => push() };
 })();
