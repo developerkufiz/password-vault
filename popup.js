@@ -600,6 +600,20 @@ function setupTabs() {
       if (btn.dataset.tab === 'settings') { renderLockoutList(); renderFolderManager(); }
     });
   });
+
+  document.querySelectorAll('.subtab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.subtab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.subpanel').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('sub-' + btn.dataset.sub).classList.add('active');
+    });
+  });
+}
+
+function resetAddSubTab() {
+  document.querySelectorAll('#panel-add .subtab').forEach((t, i) => t.classList.toggle('active', i === 0));
+  document.querySelectorAll('#panel-add .subpanel').forEach((p, i) => p.classList.toggle('active', i === 0));
 }
 
 // ── AUTO-CAPTURE ───────────────────────────────────────────────────
@@ -745,7 +759,7 @@ function saveEntry() {
   const extra = collectExtraFields('addExtraList');
   const folderId = document.getElementById('addFolder').value || null;
 
-  if (!url || !user || !pass) { showToast('URL, username & password required', 'error'); return; }
+  if (!url || !user || !pass) { resetAddSubTab(); showToast('URL, username & password required', 'error'); return; }
 
   entries.push({
     id:          Date.now().toString(36) + Math.random().toString(36).slice(2),
@@ -774,6 +788,7 @@ function clearAddForm() {
   document.getElementById('addExtraList').innerHTML = '';
   const af = document.getElementById('addFolder');
   if (af) af.value = '';
+  resetAddSubTab();
   prefillUrl();
 }
 
