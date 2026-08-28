@@ -1,0 +1,24 @@
+# Render Blueprint. In Render: New -> Blueprint -> pick this repo.
+# Root Directory must be set to: cloud-sync-server
+services:
+  - type: web
+    name: password-vault-sync
+    runtime: node
+    plan: free
+    rootDir: cloud-sync-server
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /
+    envVars:
+      - key: TIDB_HOST
+        sync: false
+      - key: TIDB_PORT
+        value: "4000"
+      - key: TIDB_USER
+        sync: false
+      - key: TIDB_PASSWORD
+        sync: false
+      - key: TIDB_DATABASE
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true

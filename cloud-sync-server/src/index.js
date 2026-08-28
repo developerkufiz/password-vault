@@ -1,0 +1,126 @@
+import express from 'express';
+import cors from 'cors';
+import jwt from 'jsonwebtoken';
+import bcrypt from 'bcryptjs';
+import { pool, initSchema } from './db.js';
+
+const app = express();
+app.use(express.json({ limit: '8mb' }));
+app.use(cors({ origin: true })); // reflects caller origin; fine for a personal single-user setup
+
+const JWT_SECRET   = process.env.JWT_SECRET || 'dev-only-insecure-secret';
+const DEFAULT_ITER = 600000;
+const norm = e => String(e || '').trim().toLowerCase();
+const h = fn => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
+
+function signToken(u) {
+  return jwt.sign({ uid: String(u.id), email: u.email }, JWT_SECRET, { expiresIn: '30d' });
+}
+
+function auth(req, res, next) {
+  const hdr = req.headers.authorization || '';
+  const tok = hdr.startsWith('Bearer ') ? hdr.slice(7) : null;
+  if (!tok) return res.status(401).json({ error: 'Not signed in' });
+  try { req.user = jwt.verify(tok, JWT_SECRET); next(); }
+  catch { res.status(401).json({ error: 'Session expired' }); }
+}
+
+app.get('/', (_req, res) => res.json({ ok: true, service: 'password-vault-sync' }));
+
+// ── REGISTER ──────────────────────────────────────────────────────
+app.post('/auth/register', h(async (req, res) => {
+  const email      = norm(req.body.email);
+  const kdfSalt    = req.body.kdfSalt;
+  const authHash   = req.body.authHash;
+  const iterations = Number(req.body.iterations) || DEFAULT_ITER;
+
+  if (!email || !email.includes('@')) return res.status(400).json({ error: 'Valid email required' });
+  if (!kdfSalt || !authHash)          return res.status(400).json({ error: 'Missing crypto fields' });
+
+  const [existing] = await pool.query('SELECT id FROM users WHERE email = ?', [email]);
+  if (existing.length) return res.status(409).json({ error: 'An account with this email already exists' });
+
+  const stored = await bcrypt.hash(authHash, 12);
+  const [r] = await pool.query(
+    'INSERT INTO users (email, kdf_salt, kdf_iterations, auth_hash) VALUES (?,?,?,?)',
+    [email, kdfSalt, iterations, stored]
+  );
+  res.json({ token: signToken({ id: r.insertId, email }) });
+}));
+
+// ── PRELOGIN (client needs the salt + iteration count to derive keys) ──
+app.post('/auth/prelogin', h(async (req, res) => {
+  const email = norm(req.body.email);
+  const [rows] = await pool.query(
+    'SELECT kdf_salt, kdf_iterations FROM users WHERE email = ?', [email]
+  );
+  if (!rows.length) {
+    // Do not reveal whether the account exists: hand back a stable dummy salt.
+    const dummy = Buffer.from('dummy:' + email).toString('base64').slice(0, 24);
+    return res.json({ kdfSalt: dummy, iterations: DEFAULT_ITER });
+  }
+  res.json({ kdfSalt: rows[0].kdf_salt, iterations: rows[0].kdf_iterations });
+}));
+
+// ── LOGIN ─────────────────────────────────────────────────────────
+app.post('/auth/login', h(async (req, res) => {
+  const email    = norm(req.body.email);
+  const authHash = req.body.authHash || '';
+  const [rows] = await pool.query('SELECT * FROM users WHERE email = ?', [email]);
+  const fail = () => res.status(401).json({ error: 'Wrong email or master password' });
+  if (!rows.length) { await bcrypt.compare(authHash, '$2a$12$0000000000000000000000000000000000000000000000000000'); return fail(); }
+  const ok = await bcrypt.compare(authHash, rows[0].auth_hash);
+  if (!ok) return fail();
+  res.json({ token: signToken(rows[0]) });
+}));
+
+// ── GET VAULT ─────────────────────────────────────────────────────
+app.get('/vault', auth, h(async (req, res) => {
+  const [rows] = await pool.query(
+    'SELECT blob, iv, version FROM vaults WHERE user_id = ?', [req.user.uid]
+  );
+  if (!rows.length) return res.json({ version: 0, blob: null, iv: null });
+  res.json(rows[0]);
+}));
+
+// ── PUT VAULT (optimistic concurrency on version) ─────────────────
+app.put('/vault', auth, h(async (req, res) => {
+  const { blob, iv } = req.body;
+  const baseVersion = Number(req.body.baseVersion) || 0;
+  if (!blob || !iv) return res.status(400).json({ error: 'Missing blob/iv' });
+
+  const [rows] = await pool.query(
+    'SELECT blob, iv, version FROM vaults WHERE user_id = ?', [req.user.uid]
+  );
+  const cur = rows[0];
+
+  if (cur && cur.version !== baseVersion) {
+    return res.status(409).json({
+      error: 'Version conflict', version: cur.version, blob: cur.blob, iv: cur.iv,
+    });
+  }
+
+  const nextVersion = (cur ? cur.version : 0) + 1;
+  if (cur) {
+    await pool.query(
+      'UPDATE vaults SET blob = ?, iv = ?, version = ? WHERE user_id = ? AND version = ?',
+      [blob, iv, nextVersion, req.user.uid, baseVersion]
+    );
+  } else {
+    await pool.query(
+      'INSERT INTO vaults (user_id, blob, iv, version) VALUES (?,?,?,?)',
+      [req.user.uid, blob, iv, nextVersion]
+    );
+  }
+  res.json({ version: nextVersion });
+}));
+
+app.use((err, _req, res, _next) => {
+  console.error(err);
+  res.status(500).json({ error: 'Server error' });
+});
+
+const port = process.env.PORT || 3000;
+initSchema()
+  .then(() => app.listen(port, () => console.log('password-vault-sync listening on ' + port)))
+  .catch(err => { console.error('Startup failed (DB unreachable?)', err); process.exit(1); });

@@ -1,0 +1,53 @@
+{
+  "manifest_version": 3,
+  "name": "Password Vault",
+  "version": "3.4.0",
+  "description": "Developer-grade password manager. Store, retrieve, and auto-fill credentials by URL. Optional zero-knowledge cloud sync.",
+  "permissions": [
+    "storage",
+    "activeTab",
+    "scripting",
+    "tabs"
+  ],
+  "host_permissions": [
+    "<all_urls>",
+    "https://*.onrender.com/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "Password-Vault-User-Guide.docx"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
+    }
+  ]
+}

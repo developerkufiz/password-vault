@@ -1,0 +1,883 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Password Vault</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Orbitron:wght@700;900&display=swap" rel="stylesheet">
+  <style>
+  /* ── THEME TOKENS ─────────────────────────────────────────── */
+  :root {
+    --accent:   #00ffe7;
+    --accent2:  #00b4ff;
+    --danger:   #ff4060;
+    --warn:     #ffb020;
+    --success:  #00cc6a;
+    --font-mono:'JetBrains Mono',monospace;
+    --font-hd:  'Orbitron',monospace;
+    --radius:   7px;
+    --trans:    0.18s ease;
+  }
+
+  /* DARK */
+  [data-theme="dark"] {
+    --bg0:        #07090d;
+    --bg1:        #0d1117;
+    --bg2:        #111820;
+    --bg3:        #0a1018;
+    --border:     #1c2b3a;
+    --text1:      #c8d8e8;
+    --text2:      #62809a;
+    --text3:      #527190;
+    --scan:       rgba(0,255,231,0.012);
+    --glow:       rgba(0,255,231,0.25);
+    --accent-dim: rgba(0,255,231,0.10);
+    --accent-dim2:rgba(0,180,255,0.10);
+  }
+
+  /* LIGHT */
+  [data-theme="light"] {
+    --bg0:        #f0f4f8;
+    --bg1:        #ffffff;
+    --bg2:        #f7f9fc;
+    --bg3:        #edf1f7;
+    --border:     #d0dae6;
+    --text1:      #1a2535;
+    --text2:      #6b7f96;
+    --text3:      #8496a8;
+    --scan:       transparent;
+    --glow:       rgba(0,160,140,0.15);
+    --accent-dim: rgba(0,180,160,0.10);
+    --accent-dim2:rgba(0,140,200,0.10);
+  }
+  [data-theme="light"] { --accent:#009e8e; --accent2:#0080cc; --success:#00944d; }
+
+  /* ── RESET ─────────────────────────────────────────────────── */
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body {
+    width:420px; min-height:560px;
+    background:var(--bg0);
+    font-family:var(--font-mono);
+    color:var(--text1);
+    font-size:12px;
+    overflow-x:hidden;
+    position:relative;
+  }
+  body::before {
+    content:'';position:fixed;inset:0;pointer-events:none;z-index:9998;
+    background:repeating-linear-gradient(0deg,transparent,transparent 2px,var(--scan) 2px,var(--scan) 4px);
+  }
+
+  /* ── SCROLLBAR ─────────────────────────────────────────────── */
+  ::-webkit-scrollbar{width:4px}
+  ::-webkit-scrollbar-track{background:var(--bg3)}
+  ::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+
+  /* ── HEADER ─────────────────────────────────────────────────── */
+  .header {
+    background:var(--bg1);
+    border-bottom:1px solid var(--border);
+    padding:12px 16px 10px;
+    position:relative;
+  }
+  .header::after {
+    content:'';position:absolute;bottom:0;left:0;right:0;height:1px;
+    background:linear-gradient(90deg,transparent,var(--accent),transparent);
+    opacity:0.4;
+  }
+  .header-top{display:flex;align-items:center;justify-content:space-between;gap:8px;}
+  .logo{display:flex;align-items:center;gap:9px;}
+  .logo-icon {
+    width:30px;height:30px;border:1.5px solid var(--accent);border-radius:6px;
+    display:flex;align-items:center;justify-content:center;font-size:15px;
+    box-shadow:0 0 10px var(--glow);
+    animation:pulse-border 3s ease-in-out infinite;
+  }
+  @keyframes pulse-border{0%,100%{box-shadow:0 0 6px var(--glow)}50%{box-shadow:0 0 18px var(--glow)}}
+  .logo-text{font-family:var(--font-hd);font-size:12px;font-weight:900;color:var(--accent);letter-spacing:2px;}
+  .logo-sub{font-size:8px;color:var(--text2);letter-spacing:1px;text-transform:uppercase;}
+  .logo-dev{font-size:8px;color:var(--accent);opacity:.6;letter-spacing:2px;margin-top:1px;}
+
+  .header-right{display:flex;align-items:center;gap:8px;}
+  .version-badge{font-size:8px;color:var(--accent);background:var(--accent-dim);border:1px solid var(--accent);border-opacity:.2;padding:2px 6px;border-radius:3px;letter-spacing:1px;}
+
+  /* THEME TOGGLE */
+  .theme-btn {
+    width:28px;height:28px;border-radius:6px;border:1px solid var(--border);
+    background:var(--bg2);cursor:pointer;display:flex;align-items:center;justify-content:center;
+    font-size:14px;transition:var(--trans);color:var(--text2);
+  }
+  .theme-btn:hover{border-color:var(--accent);color:var(--accent);}
+
+  .url-bar {
+    margin-top:9px;background:var(--bg3);border:1px solid var(--border);
+    border-radius:5px;padding:5px 9px;display:flex;align-items:center;gap:7px;
+  }
+  .url-dot{width:6px;height:6px;border-radius:50%;background:var(--success);box-shadow:0 0 5px var(--success);flex-shrink:0;animation:blink 2s ease infinite;}
+  @keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+  .url-label{font-size:9px;color:var(--text2);letter-spacing:1px;text-transform:uppercase;white-space:nowrap;}
+  .url-value{font-size:10px;color:var(--accent2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;}
+
+  /* ── TABS ─────────────────────────────────────────────────── */
+  .tabs{display:flex;background:var(--bg1);border-bottom:1px solid var(--border);padding:0 16px;gap:2px;}
+  .tab {
+    padding:9px 13px 8px;font-family:var(--font-mono);font-size:10px;font-weight:600;
+    letter-spacing:1.5px;text-transform:uppercase;color:var(--text2);cursor:pointer;
+    border:none;background:none;border-bottom:2px solid transparent;transition:var(--trans);
+  }
+  .tab:hover{color:var(--text1);}
+  .tab.active{color:var(--accent);border-bottom-color:var(--accent);}
+  .tab-count{
+    display:inline-flex;align-items:center;justify-content:center;
+    background:var(--accent-dim);color:var(--accent);border-radius:10px;
+    padding:0 5px;font-size:8px;margin-left:4px;min-width:15px;
+  }
+
+  /* ── PANELS ─────────────────────────────────────────────────── */
+  .panel{display:none;padding:14px 16px;}
+  .panel.active{display:block;}
+
+  /* ── SECTION TITLE ──────────────────────────────────────────── */
+  .section-title {
+    font-size:9px;font-weight:600;letter-spacing:2px;text-transform:uppercase;
+    color:var(--text2);margin-bottom:10px;display:flex;align-items:center;gap:8px;
+  }
+  .section-title::after{content:'';flex:1;height:1px;background:var(--border);}
+
+
+  /* ── CAPTURE BANNER (full fields) ────────────────────────────── */
+  .capture-banner {
+    display:none; background:var(--bg2);
+    border:1px solid var(--accent); border-left:3px solid var(--accent);
+    border-radius:var(--radius); padding:10px 12px; margin-bottom:12px;
+    animation:slide-in .3s cubic-bezier(.34,1.56,.64,1);
+  }
+  .capture-banner.show{display:block;}
+  @keyframes slide-in{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
+  .capture-title{font-size:10px;font-weight:700;color:var(--accent);letter-spacing:1px;margin-bottom:4px;display:flex;align-items:center;gap:6px;}
+  .capture-url{font-size:9px;color:var(--text2);margin-bottom:8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .capture-fields-list{display:flex;flex-direction:column;gap:4px;margin-bottom:8px;max-height:160px;overflow-y:auto;}
+  .capture-fields-list::-webkit-scrollbar{width:3px;}
+  .capture-fields-list::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
+
+  .capture-field-row {
+    display:grid; grid-template-columns:18px 80px 1fr auto; align-items:center; gap:6px;
+    background:var(--bg3); border:1px solid var(--border); border-radius:4px; padding:5px 8px;
+  }
+  .capture-field-row.role-username { border-color:rgba(0,255,231,.2); }
+  .capture-field-row.role-password { border-color:rgba(255,176,32,.2); }
+  .capture-field-row.role-extra    { border-color:rgba(0,180,255,.15); opacity:.85; }
+
+  .cf-role-icon { font-size:11px; text-align:center; }
+  .cf-meta { min-width:0; }
+  .cf-label { font-size:9px; font-weight:600; color:var(--text1); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .cf-identifier { font-size:8px; color:var(--accent2); font-family:var(--font-mono); letter-spacing:.3px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .cf-value { font-size:10px; color:var(--text1); font-family:var(--font-mono); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
+  .cf-value.masked { color:var(--warn); letter-spacing:2px; }
+  .cf-badge { font-size:7px; letter-spacing:.8px; text-transform:uppercase; padding:1px 5px; border-radius:3px; white-space:nowrap; flex-shrink:0; }
+  .cf-badge.u { color:var(--accent);  background:var(--accent-dim);  border:1px solid rgba(0,255,231,.2); }
+  .cf-badge.p { color:var(--warn);    background:rgba(255,176,32,.1); border:1px solid rgba(255,176,32,.2); }
+  .cf-badge.e { color:var(--accent2); background:var(--accent-dim2); border:1px solid rgba(0,180,255,.2); }
+  .cf-badge.s { color:var(--success); background:rgba(0,204,106,.08); border:1px solid rgba(0,204,106,.2); }
+  .capture-field-row.role-submit { border-color:rgba(0,204,106,.2); opacity:.9; }
+  .capture-actions{display:flex;gap:6px;}
+
+
+  /* ── FIELD ────────────────────────────────────────────────── */
+  .field{margin-bottom:10px;}
+  .field-label{font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--text2);margin-bottom:4px;display:flex;align-items:center;gap:5px;}
+  .field-label .acc{color:var(--accent);}
+  .field input, .field textarea {
+    width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:5px;
+    padding:8px 11px;font-family:var(--font-mono);font-size:12px;color:var(--text1);outline:none;
+    transition:border-color var(--trans),box-shadow var(--trans);
+  }
+  .field input::placeholder,.field textarea::placeholder{color:var(--text3);}
+  .field input:focus,.field textarea:focus{border-color:var(--accent);box-shadow:0 0 0 2px rgba(0,255,231,.08);}
+  [data-theme="light"] .field input:focus,[data-theme="light"] .field textarea:focus{box-shadow:0 0 0 2px rgba(0,158,142,.1);}
+
+  .pw-wrap{position:relative;}
+  .pw-wrap input{padding-right:36px;}
+  .pw-eye{position:absolute;right:9px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text2);font-size:13px;padding:2px;transition:color var(--trans);}
+  .pw-eye:hover{color:var(--accent);}
+
+  .strength-bar{margin-top:4px;height:2px;background:var(--border);border-radius:2px;overflow:hidden;}
+  .strength-fill{height:100%;border-radius:2px;transition:width .3s,background .3s;width:0%;}
+  .strength-text{font-size:9px;color:var(--text2);margin-top:2px;letter-spacing:1px;}
+
+  /* ── BUTTONS ─────────────────────────────────────────────── */
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:5px;padding:8px 14px;border-radius:5px;font-family:var(--font-mono);font-size:10px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;cursor:pointer;border:none;transition:var(--trans);}
+  .btn-primary{background:var(--accent-dim);color:var(--accent);border:1px solid var(--accent);width:100%;opacity:.85;}
+  .btn-primary:hover{opacity:1;box-shadow:0 0 14px var(--glow);}
+  .btn-primary:active{transform:scale(.98);}
+  .btn-success{background:rgba(0,204,106,.1);color:var(--success);border:1px solid rgba(0,204,106,.3);}
+  .btn-success:hover{background:rgba(0,204,106,.18);box-shadow:0 0 10px rgba(0,204,106,.2);}
+  .btn-warn{background:rgba(255,176,32,.1);color:var(--warn);border:1px solid rgba(255,176,32,.3);}
+  .btn-warn:hover{background:rgba(255,176,32,.18);}
+  .btn-danger{background:rgba(255,64,96,.1);color:var(--danger);border:1px solid rgba(255,64,96,.25);padding:5px 9px;font-size:9px;}
+  .btn-danger:hover{background:rgba(255,64,96,.2);box-shadow:0 0 8px rgba(255,64,96,.2);}
+  .btn-sm{background:var(--accent-dim2);color:var(--accent2);border:1px solid rgba(0,180,255,.25);padding:5px 9px;font-size:9px;}
+  .btn-sm:hover{background:rgba(0,180,255,.18);}
+  .btn-ghost{background:var(--bg2);color:var(--text2);border:1px solid var(--border);padding:5px 9px;font-size:9px;}
+  .btn-ghost:hover{color:var(--text1);border-color:var(--text2);}
+
+  /* ── SEARCH BOX ─────────────────────────────────────────────── */
+  .search-box{position:relative;margin-bottom:10px;}
+  .search-box input{width:100%;background:var(--bg2);border:1px solid var(--border);border-radius:5px;padding:7px 11px 7px 30px;font-family:var(--font-mono);font-size:11px;color:var(--text1);outline:none;transition:border-color var(--trans);}
+  .search-box input:focus{border-color:var(--accent);}
+  .search-box input::placeholder{color:var(--text3);}
+  .search-icon{position:absolute;left:9px;top:50%;transform:translateY(-50%);color:var(--text2);font-size:13px;}
+
+  /* ── ENTRY LIST ─────────────────────────────────────────────── */
+  .entry-list{display:flex;flex-direction:column;gap:7px;max-height:380px;overflow-y:auto;}
+  .empty-state{text-align:center;padding:38px 20px;color:var(--text2);}
+  .empty-icon{font-size:32px;margin-bottom:8px;opacity:.4;}
+  .empty-text{font-size:10px;letter-spacing:1px;text-transform:uppercase;}
+
+  .entry-card {
+    background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);
+    padding:10px 12px;transition:border-color var(--trans),box-shadow var(--trans);position:relative;
+  }
+  .entry-card::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--folder,linear-gradient(180deg,var(--accent),var(--accent2)));border-radius:7px 0 0 7px;opacity:.5;}
+  .entry-card:hover{border-color:rgba(0,255,231,.25);box-shadow:0 0 10px rgba(0,255,231,.05);}
+  [data-theme="light"] .entry-card:hover{border-color:rgba(0,158,142,.35);box-shadow:0 2px 8px rgba(0,0,0,.06);}
+  .entry-card.match-current{border-color:rgba(0,255,231,.4);box-shadow:0 0 14px rgba(0,255,231,.08);}
+  .entry-card.match-current::before{opacity:1;}
+  [data-theme="light"] .entry-card.match-current{border-color:rgba(0,158,142,.5);box-shadow:0 2px 12px rgba(0,158,142,.1);}
+
+  .entry-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;}
+  .entry-site{font-size:12px;font-weight:600;color:var(--text1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:200px;}
+  .entry-badges{display:flex;gap:4px;align-items:center;}
+  .match-badge{font-size:8px;letter-spacing:1px;text-transform:uppercase;color:var(--success);background:rgba(0,204,106,.1);border:1px solid rgba(0,204,106,.25);padding:2px 5px;border-radius:3px;}
+  .match-badge.exact{color:var(--accent);background:var(--accent-dim);border-color:rgba(0,255,231,.4);box-shadow:0 0 8px rgba(0,255,231,.2);}
+  .match-badge.prefix{color:var(--success);background:rgba(0,204,106,.1);border-color:rgba(0,204,106,.25);}
+  .captured-badge{font-size:8px;color:var(--accent2);background:var(--accent-dim2);border:1px solid rgba(0,180,255,.2);padding:2px 5px;border-radius:3px;letter-spacing:.5px;}
+
+  .entry-url{font-size:9px;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:5px;}
+  .entry-creds{display:flex;gap:6px;margin-bottom:6px;}
+  .cred-field{flex:1;display:flex;align-items:center;gap:4px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:4px 7px;}
+  .cred-label{font-size:8px;color:var(--text2);letter-spacing:1px;text-transform:uppercase;flex-shrink:0;}
+  .cred-val{font-size:11px;color:var(--text1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;}
+
+  .sel-pills{display:flex;flex-wrap:wrap;gap:3px;margin-bottom:6px;}
+  .sel-pill{font-size:8px;font-family:var(--font-mono);padding:2px 6px;border-radius:3px;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .user-pill{background:rgba(0,255,231,.07);color:var(--accent);border:1px solid rgba(0,255,231,.18);}
+  .pass-pill{background:rgba(255,176,32,.07);color:var(--warn);border:1px solid rgba(255,176,32,.18);}
+  .btn-pill{background:rgba(0,204,106,.07);color:var(--success);border:1px solid rgba(0,204,106,.18);}
+  .auto-pill{background:var(--bg3);color:var(--text2);border:1px solid var(--border);}
+
+  .entry-actions{display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end;}
+
+
+
+  /* ── VAULT TOOLBAR (search + sort) ─────────────────────────── */
+  .vault-toolbar{display:flex;gap:6px;margin-bottom:10px;}
+  .vault-toolbar .search-box{flex:1;margin-bottom:0;}
+  .btn-sort {
+    flex-shrink:0;border:1px solid var(--border);border-radius:5px;background:var(--bg2);
+    color:var(--text2);cursor:pointer;font-family:var(--font-mono);font-size:10px;
+    font-weight:600;letter-spacing:1px;padding:7px 10px;transition:var(--trans);
+  }
+  .btn-sort:hover{border-color:var(--accent);color:var(--accent);}
+
+  /* ── COLLAPSIBLE CARDS ───────────────────────────────────────── */
+  .entry-card { cursor:default; }
+  .entry-header { cursor:pointer; user-select:none; }
+  .collapse-icon { font-size:9px; color:var(--text3); transition:transform .25s; flex-shrink:0; margin-left:4px; }
+  .entry-card.collapsed .collapse-icon { transform:rotate(-90deg); }
+  .entry-body { overflow:hidden; transition:max-height .25s cubic-bezier(.4,0,.2,1), opacity .2s; max-height:400px; opacity:1; }
+  .entry-card.collapsed .entry-body { max-height:0; opacity:0; pointer-events:none; }
+
+  /* ── LAST LOGIN ──────────────────────────────────────────────── */
+  .last-login { font-size:8px; color:var(--text3); letter-spacing:.5px; margin-top:3px; display:flex; align-items:center; gap:4px; }
+  .last-login-dot { width:5px; height:5px; border-radius:50%; background:var(--success); box-shadow:0 0 4px var(--success); flex-shrink:0; }
+  .last-login.never .last-login-dot { background:var(--text3); box-shadow:none; }
+
+  .lockout-badge{font-size:8px;letter-spacing:1px;text-transform:uppercase;padding:2px 6px;border-radius:3px;margin-bottom:4px;display:inline-block;}
+  .lockout-badge.locked{color:var(--danger);background:rgba(255,64,96,.08);border:1px solid rgba(255,64,96,.25);}
+  .lockout-badge.warning{color:var(--warn);background:rgba(255,176,32,.08);border:1px solid rgba(255,176,32,.25);}
+
+  /* ── FOLDER SELECT ───────────────────────────────────────────── */
+  .fld-select{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:5px;padding:8px 11px;font-family:var(--font-mono);font-size:12px;color:var(--text1);outline:none;cursor:pointer;transition:border-color var(--trans);}
+  .fld-select:focus{border-color:var(--accent);}
+
+  /* ── FOLDER GROUPS (vault) ───────────────────────────────────── */
+  .folder-group{margin-bottom:9px;}
+  .folder-head{
+    display:flex;align-items:center;gap:7px;padding:6px 10px;cursor:pointer;user-select:none;
+    background:var(--bg2);border:1px solid var(--border);border-left:3px solid var(--folder,var(--accent));
+    border-radius:5px;transition:var(--trans);
+  }
+  .folder-head:hover{border-color:var(--folder,var(--accent));}
+  .folder-dot{width:8px;height:8px;border-radius:50%;background:var(--folder,var(--accent));box-shadow:0 0 6px var(--folder,var(--accent));flex-shrink:0;}
+  .folder-name{font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--text1);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .folder-count{font-size:8px;color:var(--folder,var(--accent));background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:1px 6px;min-width:16px;text-align:center;}
+  .folder-chevron{font-size:9px;color:var(--text3);transition:transform .25s;flex-shrink:0;}
+  .folder-group.collapsed .folder-chevron{transform:rotate(-90deg);}
+  .folder-items{display:flex;flex-direction:column;gap:7px;margin-top:7px;overflow:hidden;transition:max-height .25s cubic-bezier(.4,0,.2,1),opacity .2s;max-height:6000px;opacity:1;}
+  .folder-group.collapsed .folder-items{max-height:0;opacity:0;margin-top:0;pointer-events:none;}
+
+  /* ── FOLDER MANAGER (config) ─────────────────────────────────── */
+  .folder-manager{display:flex;flex-direction:column;gap:6px;margin-bottom:8px;}
+  .folder-row{display:flex;align-items:center;gap:8px;background:var(--bg2);border:1px solid var(--border);border-radius:5px;padding:6px 9px;}
+  .folder-row .folder-color{width:26px;height:26px;padding:0;border:1px solid var(--border);border-radius:4px;background:none;cursor:pointer;flex-shrink:0;}
+  .folder-row .folder-color::-webkit-color-swatch-wrapper{padding:2px;}
+  .folder-row .folder-color::-webkit-color-swatch{border:none;border-radius:3px;}
+  .folder-row .folder-label{flex:1;min-width:0;background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:5px 8px;font-family:var(--font-mono);font-size:11px;color:var(--text1);outline:none;transition:border-color var(--trans);}
+  .folder-row .folder-label:focus{border-color:var(--accent);}
+  .folder-row-count{font-size:8px;color:var(--text2);letter-spacing:1px;flex-shrink:0;min-width:14px;text-align:right;}
+
+  /* ── SELECTOR UI ─────────────────────────────────────────────── */
+  .help-badge{display:inline-flex;align-items:center;background:var(--accent-dim2);color:var(--accent2);border:1px solid rgba(0,180,255,.2);border-radius:3px;padding:1px 6px;font-size:8px;letter-spacing:1px;cursor:pointer;margin-left:5px;transition:var(--trans);}
+  .help-badge:hover{background:rgba(0,180,255,.18);}
+  .help-box{display:none;background:var(--bg3);border:1px solid rgba(0,180,255,.18);border-radius:5px;padding:9px 11px;margin-bottom:10px;font-size:9px;line-height:1.7;}
+  .help-box.open{display:block;}
+  .help-line{display:flex;align-items:baseline;gap:5px;}
+  .help-key{color:var(--text2);min-width:55px;}
+  .help-val{color:var(--accent);background:var(--accent-dim);padding:0 4px;border-radius:2px;}
+  .help-tip{color:var(--text2);font-size:8px;margin-top:4px;display:block;border-top:1px solid var(--border);padding-top:4px;}
+
+  .sel-grid{display:flex;flex-direction:column;gap:8px;margin-bottom:5px;}
+  .sel-row{display:flex;align-items:flex-start;gap:8px;}
+  .sel-ico{width:26px;height:26px;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0;margin-top:16px;}
+  .sel-ico.u{background:var(--accent-dim);color:var(--accent);border:1px solid rgba(0,255,231,.2);}
+  .sel-ico.p{background:rgba(255,176,32,.1);color:var(--warn);border:1px solid rgba(255,176,32,.2);}
+  .sel-ico.s{background:rgba(0,204,106,.1);color:var(--success);border:1px solid rgba(0,204,106,.2);}
+  .sel-fields{flex:1;}
+  .sel-input{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:5px;padding:6px 9px;font-family:var(--font-mono);font-size:10px;color:var(--accent2);outline:none;transition:border-color var(--trans);}
+  .sel-input::placeholder{color:var(--text3);font-size:9px;}
+  .sel-input:focus{border-color:var(--accent2);}
+  .sel-note{font-size:9px;color:var(--text3);text-align:center;margin-top:2px;letter-spacing:.5px;}
+
+  /* ── TOAST ───────────────────────────────────────────────────── */
+  .toast{position:fixed;bottom:12px;left:50%;transform:translateX(-50%) translateY(50px);background:var(--bg2);border:1px solid var(--accent);color:var(--accent);padding:7px 16px;border-radius:5px;font-size:10px;font-weight:600;letter-spacing:1.5px;box-shadow:0 0 18px var(--glow);transition:transform .3s cubic-bezier(.34,1.56,.64,1);z-index:9999;white-space:nowrap;}
+  .toast.show{transform:translateX(-50%) translateY(0);}
+  .toast.error{border-color:var(--danger);color:var(--danger);box-shadow:0 0 18px rgba(255,64,96,.25);}
+  .toast.warn{border-color:var(--warn);color:var(--warn);box-shadow:0 0 18px rgba(255,176,32,.2);}
+
+  /* ── SETTINGS ────────────────────────────────────────────────── */
+  .stats-row{display:flex;gap:7px;margin-bottom:14px;}
+  .stat-card{flex:1;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:9px;text-align:center;}
+  .stat-num{font-family:var(--font-hd);font-size:18px;color:var(--accent);font-weight:700;}
+  .stat-label{font-size:8px;color:var(--text2);letter-spacing:1px;text-transform:uppercase;margin-top:2px;}
+
+  .setting-row{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border);}
+  .setting-row:last-child{border-bottom:none;}
+  .setting-info{flex:1;}
+  .setting-name{font-size:11px;font-weight:600;color:var(--text1);}
+  .setting-desc{font-size:9px;color:var(--text2);margin-top:1px;letter-spacing:.3px;}
+
+  .toggle{position:relative;width:36px;height:19px;flex-shrink:0;}
+  .toggle input{opacity:0;width:0;height:0;}
+  .slider{position:absolute;inset:0;background:var(--border);border-radius:20px;cursor:pointer;transition:.3s;}
+  .slider::before{content:'';position:absolute;width:13px;height:13px;left:3px;top:3px;background:var(--text2);border-radius:50%;transition:.3s;}
+  .toggle input:checked+.slider{background:var(--accent-dim);}
+  .toggle input:checked+.slider::before{transform:translateX(17px);background:var(--accent);box-shadow:0 0 6px var(--glow);}
+
+  .attempts-wrap{display:flex;align-items:center;gap:5px;flex-shrink:0;}
+  .attempts-wrap input[type=number]{width:50px;background:var(--bg3);border:1px solid var(--border);border-radius:5px;padding:5px 7px;font-family:var(--font-mono);font-size:14px;font-weight:700;color:var(--warn);text-align:center;outline:none;transition:border-color var(--trans);-moz-appearance:textfield;}
+  .attempts-wrap input[type=number]::-webkit-outer-spin-button,.attempts-wrap input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;}
+  .attempts-wrap input[type=number]:focus{border-color:var(--warn);}
+  .attempts-unit{font-size:9px;color:var(--text2);letter-spacing:1px;text-transform:uppercase;}
+
+  .lockout-list{display:flex;flex-direction:column;gap:5px;margin-bottom:12px;max-height:120px;overflow-y:auto;}
+  .lockout-empty{font-size:9px;color:var(--text3);text-align:center;padding:8px 0;letter-spacing:1px;}
+  .lockout-row{display:flex;align-items:center;gap:7px;background:var(--bg2);border:1px solid var(--border);border-radius:5px;padding:6px 9px;}
+  .lockout-row.locked{border-color:rgba(255,64,96,.3);background:rgba(255,64,96,.04);}
+  .lockout-row.warning{border-color:rgba(255,176,32,.3);background:rgba(255,176,32,.04);}
+  .lockout-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;}
+  .locked .lockout-dot{background:var(--danger);box-shadow:0 0 5px var(--danger);}
+  .warning .lockout-dot{background:var(--warn);box-shadow:0 0 5px var(--warn);}
+  .lockout-row:not(.locked):not(.warning) .lockout-dot{background:var(--success);box-shadow:0 0 5px var(--success);}
+  .lockout-info{flex:1;min-width:0;}
+  .lockout-domain{font-size:10px;font-weight:600;color:var(--text1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .lockout-meta{font-size:8px;color:var(--text2);margin-top:1px;}
+  .locked .lockout-meta{color:var(--danger);}
+  .warning .lockout-meta{color:var(--warn);}
+  .btn-unlock{background:rgba(0,204,106,.08);color:var(--success);border:1px solid rgba(0,204,106,.22);border-radius:4px;padding:3px 7px;font-family:var(--font-mono);font-size:8px;font-weight:600;letter-spacing:1px;cursor:pointer;flex-shrink:0;transition:var(--trans);text-transform:uppercase;}
+  .btn-unlock:hover{background:rgba(0,204,106,.16);}
+
+  .action-group{display:flex;flex-direction:column;gap:6px;margin-top:12px;}
+
+  /* ── EDIT MODAL ──────────────────────────────────────────────── */
+  .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:10000;align-items:center;justify-content:center;}
+  .modal-overlay.open{display:flex;}
+  [data-theme="light"] .modal-overlay{background:rgba(0,0,0,.35);}
+  .modal {
+    background:var(--bg1);border:1px solid var(--border);border-radius:10px;
+    width:390px;max-height:90vh;overflow-y:auto;
+    box-shadow:0 0 40px rgba(0,0,0,.5);
+    animation:modal-in .25s cubic-bezier(.34,1.56,.64,1);
+  }
+  @keyframes modal-in{from{opacity:0;transform:scale(.93)}to{opacity:1;transform:none}}
+  .modal-header{display:flex;align-items:center;justify-content:space-between;padding:14px 16px 12px;border-bottom:1px solid var(--border);}
+  .modal-title{font-family:var(--font-hd);font-size:11px;color:var(--accent);letter-spacing:2px;font-weight:700;}
+  .modal-close{background:none;border:none;color:var(--text2);cursor:pointer;font-size:16px;padding:2px;transition:color var(--trans);}
+  .modal-close:hover{color:var(--danger);}
+  .modal-body{padding:14px 16px;}
+  .modal-footer{display:flex;gap:8px;padding:12px 16px;border-top:1px solid var(--border);}
+  .modal-footer .btn{flex:1;}
+
+  /* ── EXTRA FIELDS ────────────────────────────────────────────── */
+  .extra-fields-list { display:flex; flex-direction:column; gap:8px; margin-bottom:8px; }
+  .extra-field-row {
+    display:grid; grid-template-columns:1fr 1fr auto; gap:6px; align-items:end;
+    background:var(--bg3); border:1px solid var(--border); border-radius:6px; padding:8px 10px;
+    position:relative;
+  }
+  .extra-field-row::before {
+    content:''; position:absolute; left:0; top:0; bottom:0; width:3px;
+    background:linear-gradient(180deg,var(--warn),var(--accent2));
+    border-radius:6px 0 0 6px; opacity:.6;
+  }
+  .extra-field-col { display:flex; flex-direction:column; gap:3px; }
+  .extra-field-col label { font-size:8px; letter-spacing:1px; text-transform:uppercase; color:var(--text2); }
+  .extra-field-col input {
+    background:var(--bg1); border:1px solid var(--border); border-radius:4px;
+    padding:5px 8px; font-family:var(--font-mono); font-size:11px; color:var(--text1);
+    outline:none; transition:border-color var(--trans); width:100%;
+  }
+  .extra-field-col input::placeholder { color:var(--text3); font-size:10px; }
+  .extra-field-col input:focus { border-color:var(--warn); }
+  .extra-field-col input.sel-val { color:var(--accent2); }
+  .extra-field-col input.sel-val:focus { border-color:var(--accent2); }
+  .btn-remove-field {
+    width:24px; height:24px; border-radius:4px; background:rgba(255,64,96,.08);
+    color:var(--danger); border:1px solid rgba(255,64,96,.2); cursor:pointer;
+    font-size:12px; display:flex; align-items:center; justify-content:center;
+    flex-shrink:0; align-self:flex-end; margin-bottom:1px; transition:var(--trans);
+  }
+  .btn-remove-field:hover { background:rgba(255,64,96,.18); }
+  .btn-add-field {
+    display:flex; align-items:center; justify-content:center; gap:6px;
+    width:100%; padding:7px; border:1px dashed var(--border); border-radius:6px;
+    background:transparent; color:var(--text2); font-family:var(--font-mono);
+    font-size:10px; letter-spacing:1px; cursor:pointer; transition:var(--trans);
+    text-transform:uppercase;
+  }
+  .btn-add-field:hover { border-color:var(--accent); color:var(--accent); background:var(--accent-dim); }
+  /* extra field pills in vault cards */
+  .extra-pill { background:rgba(255,176,32,.07); color:var(--warn); border:1px solid rgba(255,176,32,.18); }
+
+
+
+  /* ── ICON BUTTONS ────────────────────────────────────────────── */
+  .btn-icon{width:26px;height:26px;padding:0;font-size:12px;background:var(--bg3);color:var(--text2);border:1px solid var(--border);border-radius:4px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;}
+  .btn-icon:hover{color:var(--text1);border-color:var(--text2);}
+  .btn-icon-danger{background:rgba(255,64,96,.08);color:var(--danger);border-color:rgba(255,64,96,.2);}
+  .btn-icon-danger:hover{background:rgba(255,64,96,.18);}
+  .btn-unlock-sm{color:var(--warn);border-color:rgba(255,176,32,.3);}
+  .entry-actions{display:flex;align-items:center;justify-content:space-between;gap:5px;}
+  .entry-actions-left{display:flex;gap:5px;flex-wrap:wrap;}
+  .entry-actions-right{display:flex;gap:4px;align-items:center;flex-shrink:0;}
+
+
+
+
+  /* ── PIN MODAL ───────────────────────────────────────────────── */
+  #pinInput:focus { border-color:var(--accent); box-shadow:0 0 0 2px rgba(0,255,231,.08); }
+  #pinInput.pin-error { border-color:var(--danger); animation: pin-shake .3s; }
+  @keyframes pin-shake {
+    0%,100%{ transform:translateX(0); }
+    25%    { transform:translateX(-4px); }
+    75%    { transform:translateX(4px); }
+  }
+
+
+  /* ── MODE PILL BUTTON ────────────────────────────────────────── */
+  .btn-mode-pill {
+    font-size: 7px; font-family: var(--font-mono); font-weight: 700;
+    letter-spacing: 1px; text-transform: uppercase;
+    padding: 3px 7px; border-radius: 20px; cursor: pointer;
+    border: 1px solid var(--border); background: var(--bg2);
+    color: var(--text3); white-space: nowrap; transition: all .2s;
+    min-width: 62px; text-align: center;
+  }
+  .btn-mode-pill.individual {
+    background: rgba(0,255,231,.1); color: var(--accent);
+    border-color: rgba(0,255,231,.35);
+  }
+  .entry-toggle-disabled { opacity: 0.38; pointer-events: none; }
+
+  /* ── HISTORY MODAL ───────────────────────────────────────────── */
+  .history-modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:10001;align-items:center;justify-content:center;}
+  .history-modal-overlay.open{display:flex;}
+  .history-modal{background:var(--bg1);border:1px solid var(--border);border-radius:10px;width:390px;max-height:85vh;overflow-y:auto;box-shadow:0 0 40px rgba(0,0,0,.5);animation:modal-in .25s cubic-bezier(.34,1.56,.64,1);}
+  .history-list{display:flex;flex-direction:column;gap:4px;padding:0 16px 14px;}
+  .history-row{display:grid;grid-template-columns:22px 1fr auto;align-items:center;gap:8px;background:var(--bg2);border:1px solid var(--border);border-radius:5px;padding:7px 10px;}
+  .history-num{font-size:9px;color:var(--text3);font-family:var(--font-mono);text-align:center;}
+  .history-dt{font-size:10px;color:var(--text1);font-family:var(--font-mono);}
+  .history-ago{font-size:8px;color:var(--text2);margin-top:1px;}
+  .history-badge{font-size:7px;letter-spacing:.8px;text-transform:uppercase;padding:2px 6px;border-radius:3px;white-space:nowrap;}
+  .history-badge.success{color:var(--success);background:rgba(0,204,106,.08);border:1px solid rgba(0,204,106,.2);}
+  .history-badge.fail{color:var(--danger);background:rgba(255,64,96,.08);border:1px solid rgba(255,64,96,.2);}
+  .history-row.history-fail{border-color:rgba(255,64,96,.15);background:rgba(255,64,96,.03);}
+  .history-empty{text-align:center;padding:20px;font-size:10px;color:var(--text3);letter-spacing:1px;}
+
+  /* ── CLOUD SYNC ──────────────────────────────────────────────── */
+  .cloud-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;display:flex;flex-direction:column;gap:7px;}
+  .cloud-card input{background:var(--bg3);border:1px solid var(--border);border-radius:5px;padding:7px 9px;font-family:var(--font-mono);font-size:11px;color:var(--text1);outline:none;transition:border-color var(--trans);}
+  .cloud-card input:focus{border-color:var(--accent);}
+  .cloud-row{display:flex;align-items:center;gap:7px;font-size:11px;color:var(--text1);}
+  .cloud-sub{font-size:9px;color:var(--text2);line-height:1.5;}
+  .cloud-err{font-size:9px;color:var(--danger);min-height:12px;letter-spacing:.3px;}
+  .cloud-btns{display:flex;gap:6px;}
+  .cloud-btns .btn{flex:1;}
+  .cloud-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+  .cloud-dot.on{background:var(--success);box-shadow:0 0 6px var(--success);}
+  .cloud-dot.off{background:var(--text3);}
+  .cloud-dot.lock{background:var(--warn);box-shadow:0 0 6px var(--warn);}
+
+  </style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <div class="header-top">
+    <div class="logo">
+      <div class="logo-icon">🔐</div>
+      <div>
+        <div class="logo-text">PASSWORD VAULT</div>
+        <div class="logo-sub">Secure Credential Vault</div>
+        <div class="logo-dev">by KuFiz</div>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="version-badge">v3.3 · KuFiz</div>
+      <button class="theme-btn" id="themeToggleBtn" title="Toggle theme">🌙</button>
+    </div>
+  </div>
+  <div class="url-bar">
+    <div class="url-dot"></div>
+    <span class="url-label">URL</span>
+    <span class="url-value" id="currentUrl">—</span>
+  </div>
+</div>
+
+<!-- TABS -->
+<div class="tabs">
+  <button class="tab active" data-tab="vault">Vault <span class="tab-count" id="vaultCount">0</span></button>
+  <button class="tab" data-tab="add">+ Add</button>
+  <button class="tab" data-tab="settings">Config</button>
+</div>
+
+<!-- VAULT PANEL -->
+<div class="panel active" id="panel-vault">
+  <!-- Auto-capture banner -->
+  <div class="capture-banner" id="captureBanner">
+    <div class="capture-title">⚡ Login Detected — Save Credentials?</div>
+    <div class="capture-url" id="captureUrl"></div>
+    <div class="capture-fields-list" id="captureFieldsList"></div>
+    <div class="capture-actions">
+      <button class="btn btn-success" id="captureSaveBtn" style="flex:1">✓ Save</button>
+      <button class="btn btn-ghost" id="captureDismissBtn" style="flex:1">✕ Dismiss</button>
+    </div>
+  </div>
+
+  <div class="vault-toolbar">
+    <div class="search-box">
+      <span class="search-icon">⌕</span>
+      <input type="text" id="searchInput" placeholder="search credentials...">
+    </div>
+    <button class="btn-sort" id="sortDirBtn" title="Sort by name (ascending) — click to toggle">A–Z</button>
+  </div>
+  <div class="entry-list" id="entryList">
+    <div class="empty-state">
+      <div class="empty-icon">🗄</div>
+      <div class="empty-text">Vault is empty</div>
+    </div>
+  </div>
+</div>
+
+<!-- ADD PANEL -->
+<div class="panel" id="panel-add">
+  <div class="section-title">Register Credential</div>
+  <div class="field">
+    <div class="field-label"><span class="acc">//</span> Site Label</div>
+    <input type="text" id="addLabel" placeholder="e.g. GitHub, Gmail, AWS...">
+  </div>
+  <div class="field">
+    <div class="field-label"><span class="acc">//</span> URL</div>
+    <input type="text" id="addUrl" placeholder="https://github.com/login">
+  </div>
+  <div class="field">
+    <div class="field-label"><span class="acc">//</span> Username / Email</div>
+    <input type="text" id="addUsername" placeholder="user@example.com">
+  </div>
+  <div class="field">
+    <div class="field-label"><span class="acc">//</span> Password</div>
+    <div class="pw-wrap">
+      <input type="password" id="addPassword" placeholder="••••••••••••">
+      <button class="pw-eye" id="pwToggleBtn">👁</button>
+    </div>
+    <div class="strength-bar"><div class="strength-fill" id="strengthFill"></div></div>
+    <div class="strength-text" id="strengthText">—</div>
+  </div>
+  <div class="field">
+    <div class="field-label"><span class="acc">//</span> Notes (optional)</div>
+    <input type="text" id="addNotes" placeholder="2FA key, recovery email...">
+  </div>
+  <div class="field">
+    <div class="field-label"><span class="acc">//</span> Folder</div>
+    <select class="fld-select" id="addFolder"></select>
+  </div>
+
+  <div class="section-title" style="margin-top:4px">
+    Field Selectors
+    <span class="help-badge" id="helpToggle">? how</span>
+  </div>
+  <div class="help-box" id="helpBox">
+    <div class="help-line"><span class="help-key">By ID</span>→<span class="help-val">#login-email</span> or bare: <span class="help-val">login-email</span></div>
+    <div class="help-line"><span class="help-key">By name</span>→<span class="help-val">name:username</span></div>
+    <div class="help-line"><span class="help-key">By class</span>→<span class="help-val">.input-field</span></div>
+    <div class="help-line"><span class="help-key">CSS</span>→<span class="help-val">input[type="email"]</span></div>
+    <div class="help-tip">💡 Right-click field → Inspect → copy id / name / class</div>
+  </div>
+  <div class="sel-grid">
+    <div class="sel-row">
+      <div class="sel-ico u">U</div>
+      <div class="sel-fields">
+        <div class="field-label"><span class="acc">//</span> Username field</div>
+        <input type="text" class="sel-input" id="selUsername" placeholder="#email  or  name:loginid  or  .user-input">
+      </div>
+    </div>
+    <div class="sel-row">
+      <div class="sel-ico p">P</div>
+      <div class="sel-fields">
+        <div class="field-label"><span class="acc">//</span> Password field</div>
+        <input type="text" class="sel-input" id="selPassword" placeholder="#password  or  name:pass  or  .pwd-field">
+      </div>
+    </div>
+    <div class="sel-row">
+      <div class="sel-ico s">⏎</div>
+      <div class="sel-fields">
+        <div class="field-label"><span class="acc">//</span> Submit button <span style="color:var(--text3)">(optional)</span></div>
+        <input type="text" class="sel-input" id="selSubmit" placeholder="#login-btn  or  name:submit  or  button[type=submit]">
+      </div>
+    </div>
+  </div>
+  <div class="sel-note">Leave blank to use auto-detection</div>
+
+  <div class="section-title" style="margin-top:6px">Extra Fields <span style="color:var(--text3);font-size:8px;font-weight:400;letter-spacing:.5px">(optional — company code, branch ID, OTP...)</span></div>
+  <div class="extra-fields-list" id="addExtraList"></div>
+  <button class="btn-add-field" id="addExtraFieldBtn">+ Add Extra Field</button>
+
+  <button class="btn btn-primary" id="saveEntryBtn" style="margin-top:11px">⬡ Save Credential</button>
+</div>
+
+<!-- SETTINGS PANEL -->
+<div class="panel" id="panel-settings">
+  <div class="section-title">Cloud Sync</div>
+  <div id="cloudSync" style="margin-bottom:14px"></div>
+
+  <div class="stats-row">
+    <div class="stat-card"><div class="stat-num" id="statTotal">0</div><div class="stat-label">Entries</div></div>
+    <div class="stat-card"><div class="stat-num" id="statSites">0</div><div class="stat-label">Sites</div></div>
+    <div class="stat-card"><div class="stat-num" id="statStrong">0</div><div class="stat-label">Strong</div></div>
+  </div>
+
+  <div class="section-title">Behaviour</div>
+  <div class="setting-row">
+    <div class="setting-info"><div class="setting-name">Auto-fill on match</div><div class="setting-desc">Inject credentials when URL matches</div></div>
+    <label class="toggle"><input type="checkbox" id="toggleAutofill" checked><span class="slider"></span></label>
+  </div>
+  <div class="setting-row">
+    <div class="setting-info"><div class="setting-name">Auto-capture login</div><div class="setting-desc">Detect & prompt to save on successful login</div></div>
+    <label class="toggle"><input type="checkbox" id="toggleCapture" checked><span class="slider"></span></label>
+  </div>
+  <div class="setting-row">
+    <div class="setting-info"><div class="setting-name">Auto-submit form</div><div class="setting-desc">When ON: clicks submit button after fill. When OFF: fills only, never submits.</div></div>
+    <label class="toggle"><input type="checkbox" id="toggleAutosubmit"><span class="slider"></span></label>
+  </div>
+  <div class="setting-row">
+    <div class="setting-info"><div class="setting-name">Show fill notification</div><div class="setting-desc">Toast alert when credentials are injected</div></div>
+    <label class="toggle"><input type="checkbox" id="toggleNotify" checked><span class="slider"></span></label>
+  </div>
+  <div class="setting-row">
+    <div class="setting-info"><div class="setting-name">Max auto-login attempts</div><div class="setting-desc">Stop auto-fill after N failed attempts per URL</div></div>
+    <div class="attempts-wrap">
+      <input type="number" id="maxAttemptsInput" min="1" max="99" value="5">
+      <span class="attempts-unit">tries</span>
+    </div>
+  </div>
+
+  <div class="section-title" style="margin-top:12px">Security</div>
+  <div class="setting-row">
+    <div class="setting-info">
+      <div class="setting-name">Master PIN</div>
+      <div class="setting-desc">6-digit PIN. Once set, input is locked. Reset wipes PIN + all credentials.</div>
+    </div>
+    <div style="display:flex;gap:6px;align-items:center;">
+      <!-- No PIN: show setup input -->
+      <div id="pinSetupArea" style="display:flex;gap:6px;align-items:center;">
+        <div class="pw-wrap" style="width:106px">
+          <input type="password" id="masterPinInput" placeholder="6-digit PIN" maxlength="6" inputmode="numeric"
+            style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:5px;padding:6px 28px 6px 9px;font-family:var(--font-mono);font-size:14px;letter-spacing:4px;color:var(--text1);outline:none;">
+          <button class="pw-eye" id="masterPinEye" style="right:5px">👁</button>
+        </div>
+        <button class="btn btn-sm" id="saveMasterPinBtn">Save</button>
+      </div>
+      <!-- PIN set: show dots + reset -->
+      <div id="pinActiveArea" style="display:none;gap:6px;align-items:center;">
+        <span style="font-family:var(--font-mono);font-size:14px;color:var(--accent);letter-spacing:5px;background:var(--bg3);border:1px solid var(--border);border-radius:5px;padding:5px 10px;">● ● ● ● ● ●</span>
+        <button class="btn btn-danger" id="resetMasterPinBtn" style="font-size:9px;padding:5px 9px;" title="Wipes PIN and all saved credentials">✕ Reset & Wipe</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-title" style="margin-top:12px">Folders</div>
+  <div id="folderManager" class="folder-manager"></div>
+  <button class="btn-add-field" id="addFolderBtn" style="margin-bottom:4px">+ Add Folder</button>
+
+  <div class="section-title" style="margin-top:12px">Lockout Status</div>
+  <div id="lockoutList" class="lockout-list"><div class="lockout-empty">No lockouts active</div></div>
+
+  <div class="section-title" style="margin-top:12px">Data</div>
+  <div class="action-group">
+    <button class="btn btn-sm" id="exportBtn" style="width:100%">⬇ Export vault.json</button>
+    <button class="btn btn-sm" id="importBtn" style="width:100%">⬆ Import vault.json</button>
+    <input type="file" id="importFile" accept=".json" style="display:none">
+    <button class="btn btn-danger" id="wipeBtn" style="width:100%">✕ Wipe Vault</button>
+  </div>
+
+  <div class="section-title" style="margin-top:12px">Help</div>
+  <div class="action-group">
+    <button class="btn btn-sm" id="downloadDocsBtn" style="width:100%;color:var(--accent2);border-color:rgba(0,180,255,.3)">📄 Download User Guide (.docx)</button>
+  </div>
+</div>
+
+<!-- PIN PROMPT MODAL -->
+<div class="modal-overlay" id="pinModal" style="display:none;z-index:10002">
+  <div class="modal" style="max-width:280px">
+    <div class="modal-header">
+      <div class="modal-title">🔒 ENTER MASTER PIN</div>
+      <button class="modal-close" id="pinModalClose">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="field" style="margin-bottom:6px">
+        <div class="field-label" style="margin-bottom:6px"><span class="acc">//</span> Master PIN required to reveal password</div>
+        <div class="pw-wrap">
+          <input type="password" id="pinInput" placeholder="• • • • • •" maxlength="6" inputmode="numeric" pattern="[0-9]*"
+            style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:5px;padding:8px 36px 8px 11px;font-family:var(--font-mono);font-size:16px;color:var(--text1);outline:none;letter-spacing:4px;text-align:center;">
+          <button class="pw-eye" id="pinEye">👁</button>
+        </div>
+        <div id="pinError" style="font-size:9px;color:var(--danger);margin-top:5px;letter-spacing:1px;min-height:14px;"></div>
+      </div>
+      <button class="btn btn-primary" id="pinConfirmBtn" style="margin-top:4px">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<!-- EDIT MODAL -->
+<div class="modal-overlay" id="editModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">✏ EDIT CREDENTIAL</div>
+      <button class="modal-close" id="modalCloseBtn">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="editId">
+      <div class="field"><div class="field-label"><span class="acc">//</span> Site Label</div><input type="text" id="editLabel" placeholder="Label"></div>
+      <div class="field"><div class="field-label"><span class="acc">//</span> URL</div><input type="text" id="editUrl" placeholder="https://..."></div>
+      <div class="field"><div class="field-label"><span class="acc">//</span> Username / Email</div><input type="text" id="editUsername" placeholder="user@example.com"></div>
+      <div class="field"><div class="field-label" style="justify-content:space-between;"><span style="display:flex;align-items:center;gap:5px"><span class="acc">//</span> Password</span>
+          <label style="display:flex;align-items:center;gap:5px;font-size:8px;letter-spacing:1px;color:var(--text2)" title="Set a Master PIN in Config to enable per-entry protection">
+            <span id="pinProtectLabel">PIN PROTECT</span>
+            <label class="toggle" style="transform:scale(.75);transform-origin:right center"><input type="checkbox" id="editPinProtect" checked><span class="slider"></span></label>
+          </label>
+        </div>
+        <div class="pw-wrap">
+          <input type="password" id="editPassword" placeholder="••••••••••••">
+          <button class="pw-eye" id="editPwEye" title="Reveal password (requires Master PIN)">🔒</button>
+        </div>
+        <div class="strength-bar"><div class="strength-fill" id="editStrengthFill"></div></div>
+        <div class="strength-text" id="editStrengthText">—</div>
+      </div>
+      <div class="field"><div class="field-label"><span class="acc">//</span> Notes</div><input type="text" id="editNotes" placeholder="Notes..."></div>
+      <div class="field"><div class="field-label"><span class="acc">//</span> Folder</div><select class="fld-select" id="editFolder"></select></div>
+      <div class="section-title" style="margin-top:4px">Field Selectors</div>
+      <div class="sel-grid">
+        <div class="sel-row">
+          <div class="sel-ico u">U</div>
+          <div class="sel-fields"><div class="field-label"><span class="acc">//</span> Username field</div><input type="text" class="sel-input" id="editSelUsername" placeholder="#email or name:loginid"></div>
+        </div>
+        <div class="sel-row">
+          <div class="sel-ico p">P</div>
+          <div class="sel-fields"><div class="field-label"><span class="acc">//</span> Password field</div><input type="text" class="sel-input" id="editSelPassword" placeholder="#password or name:pass"></div>
+        </div>
+        <div class="sel-row">
+          <div class="sel-ico s">⏎</div>
+          <div class="sel-fields"><div class="field-label"><span class="acc">//</span> Submit button</div><input type="text" class="sel-input" id="editSelSubmit" placeholder="#login-btn or name:submit"></div>
+        </div>
+      </div>
+    </div>
+
+      <div class="section-title" style="margin-top:6px">Extra Fields <span style="color:var(--text3);font-size:8px;font-weight:400">(optional)</span></div>
+      <div class="extra-fields-list" id="editExtraList"></div>
+      <button class="btn-add-field" id="editAddExtraFieldBtn">+ Add Extra Field</button>
+
+      <div class="section-title" style="margin-top:10px">Behaviour Override</div>
+      <div style="display:flex;flex-direction:column;gap:6px;margin-top:4px;">
+
+        <!-- Auto-fill row -->
+        <div class="setting-row" style="padding:7px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;">
+          <div class="setting-info">
+            <div class="setting-name" style="font-size:10px">Auto-fill</div>
+            <div class="setting-desc" style="font-size:9px" id="editAutofillDesc">Following global setting</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:7px;">
+            <label class="toggle" style="transform:scale(.8);transform-origin:right center">
+              <input type="checkbox" id="editAutofillToggle">
+              <span class="slider"></span>
+            </label>
+            <button type="button" id="editAutofillModeBtn" class="btn-mode-pill">GLOBAL</button>
+          </div>
+        </div>
+
+        <!-- Auto-submit row -->
+        <div class="setting-row" style="padding:7px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;">
+          <div class="setting-info">
+            <div class="setting-name" style="font-size:10px">Auto-submit</div>
+            <div class="setting-desc" style="font-size:9px" id="editAutosubmitDesc">Following global setting</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:7px;">
+            <label class="toggle" style="transform:scale(.8);transform-origin:right center">
+              <input type="checkbox" id="editAutosubmitToggle">
+              <span class="slider"></span>
+            </label>
+            <button type="button" id="editAutosubmitModeBtn" class="btn-mode-pill">GLOBAL</button>
+          </div>
+        </div>
+
+      </div>
+
+    <div class="modal-footer">
+      <button class="btn btn-primary" id="editSaveBtn">💾 Save Changes</button>
+      <button class="btn btn-ghost" id="editCancelBtn">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- HISTORY MODAL -->
+<div class="history-modal-overlay" id="historyModal">
+  <div class="history-modal">
+    <div class="modal-header">
+      <div class="modal-title">🕐 LOGIN HISTORY</div>
+      <button class="modal-close" id="historyModalClose">✕</button>
+    </div>
+    <div class="modal-body" style="padding:10px 16px 4px">
+      <div style="font-size:9px;color:var(--text2);margin-bottom:8px;" id="historyModalLabel"></div>
+    </div>
+    <div class="history-list" id="historyList"></div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script src="cloud.js"></script>
+<script src="popup.js"></script>
+</body>
+</html>
