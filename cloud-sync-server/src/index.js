@@ -77,7 +77,7 @@ app.post('/auth/login', h(async (req, res) => {
 // ── GET VAULT ─────────────────────────────────────────────────────
 app.get('/vault', auth, h(async (req, res) => {
   const [rows] = await pool.query(
-    'SELECT blob, iv, version FROM vaults WHERE user_id = ?', [req.user.uid]
+    'SELECT `blob`, iv, version FROM vaults WHERE user_id = ?', [req.user.uid]
   );
   if (!rows.length) return res.json({ version: 0, blob: null, iv: null });
   res.json(rows[0]);
@@ -90,7 +90,7 @@ app.put('/vault', auth, h(async (req, res) => {
   if (!blob || !iv) return res.status(400).json({ error: 'Missing blob/iv' });
 
   const [rows] = await pool.query(
-    'SELECT blob, iv, version FROM vaults WHERE user_id = ?', [req.user.uid]
+    'SELECT `blob`, iv, version FROM vaults WHERE user_id = ?', [req.user.uid]
   );
   const cur = rows[0];
 
@@ -103,12 +103,12 @@ app.put('/vault', auth, h(async (req, res) => {
   const nextVersion = (cur ? cur.version : 0) + 1;
   if (cur) {
     await pool.query(
-      'UPDATE vaults SET blob = ?, iv = ?, version = ? WHERE user_id = ? AND version = ?',
+      'UPDATE vaults SET `blob` = ?, iv = ?, version = ? WHERE user_id = ? AND version = ?',
       [blob, iv, nextVersion, req.user.uid, baseVersion]
     );
   } else {
     await pool.query(
-      'INSERT INTO vaults (user_id, blob, iv, version) VALUES (?,?,?,?)',
+      'INSERT INTO vaults (user_id, `blob`, iv, version) VALUES (?,?,?,?)',
       [req.user.uid, blob, iv, nextVersion]
     );
   }

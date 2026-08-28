@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS users (
 
 CREATE TABLE IF NOT EXISTS vaults (
   user_id    BIGINT PRIMARY KEY,
-  blob       LONGTEXT    NOT NULL,   -- AES-GCM ciphertext (base64), server cannot read it
+  `blob`     LONGTEXT    NOT NULL,   -- AES-GCM ciphertext (base64), server cannot read it
   iv         VARCHAR(32) NOT NULL,   -- AES-GCM nonce (base64)
   version    INT         NOT NULL DEFAULT 1,
   updated_at DATETIME    DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP

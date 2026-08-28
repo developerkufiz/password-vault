@@ -38,7 +38,7 @@ export async function initSchema() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS vaults (
       user_id    BIGINT PRIMARY KEY,
-      blob       LONGTEXT    NOT NULL,
+      \`blob\`     LONGTEXT    NOT NULL,
       iv         VARCHAR(32) NOT NULL,
       version    INT         NOT NULL DEFAULT 1,
       updated_at DATETIME    DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
