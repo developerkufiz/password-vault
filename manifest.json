@@ -1,13 +1,15 @@
 {
   "manifest_version": 3,
   "name": "Password Vault",
-  "version": "3.4.0",
-  "description": "Developer-grade password manager. Store, retrieve, and auto-fill credentials by URL. Optional zero-knowledge cloud sync.",
+  "version": "3.5.0",
+  "description": "Developer-grade password manager. Store, retrieve, and auto-fill credentials by URL. Optional cloud sync (zero-knowledge or Google login).",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAzQjkurIgB0HK+O+hrZdB5LfpE9EI1upCJP62GAN7hpjGYO95YTe88cddNl04BHq4jPxDn5YII0WNNUdj80UHJwk5fRSJElKUa8VgqXtKDNt591F8YniOyiWu3QY7p9qK5nRcHi1xY2WbYQoiP4T80T9Tki1enhValHU1pvFy1lUpbIHF/n3nua9V1248/Dsa3uoUEH3KBeF5KOwK16dShlotg38q437VJEkYEn5i0qNBHcAqnjFmohFtZHVBcxple5LYH0Mpp5Of2CPIxaUwEiEBhvr4LLH6XwBIwcObd+R2HkF5iJGI63wxOHO1D10m9wGtvwyJWSkxCOVjP1i8HQIDAQAB",
   "permissions": [
     "storage",
     "activeTab",
     "scripting",
-    "tabs"
+    "tabs",
+    "identity"
   ],
   "host_permissions": [
     "<all_urls>",

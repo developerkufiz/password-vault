@@ -30,11 +30,22 @@ export async function initSchema() {
     CREATE TABLE IF NOT EXISTS users (
       id             BIGINT PRIMARY KEY AUTO_INCREMENT,
       email          VARCHAR(190) NOT NULL UNIQUE,
-      kdf_salt       VARCHAR(64)  NOT NULL,
+      auth_method    VARCHAR(16)  NOT NULL DEFAULT 'password',
+      kdf_salt       VARCHAR(64)  NULL,
       kdf_iterations INT          NOT NULL DEFAULT 600000,
-      auth_hash      VARCHAR(255) NOT NULL,
+      auth_hash      VARCHAR(255) NULL,
+      google_sub     VARCHAR(64)  NULL,
+      vault_key      VARCHAR(64)  NULL,
       created_at     DATETIME     DEFAULT CURRENT_TIMESTAMP
     )`);
+
+  // Migrations for databases created before Google login existed.
+  const safe = async sql => { try { await pool.query(sql); } catch (e) { if (!/duplicate|already exists|check that column/i.test(e.message)) console.warn('migrate:', e.message); } };
+  await safe("ALTER TABLE users ADD COLUMN auth_method VARCHAR(16) NOT NULL DEFAULT 'password'");
+  await safe("ALTER TABLE users ADD COLUMN google_sub VARCHAR(64) NULL");
+  await safe("ALTER TABLE users ADD COLUMN vault_key VARCHAR(64) NULL");
+  await safe("ALTER TABLE users MODIFY COLUMN kdf_salt VARCHAR(64) NULL");
+  await safe("ALTER TABLE users MODIFY COLUMN auth_hash VARCHAR(255) NULL");
   await pool.query(`
     CREATE TABLE IF NOT EXISTS vaults (
       user_id    BIGINT PRIMARY KEY,

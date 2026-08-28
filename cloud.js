@@ -10,6 +10,10 @@ window.Cloud = (function () {
   // ⚠ CHANGE THIS after you deploy the server to Render:
   const API_BASE = 'https://password-vault-sync.onrender.com';
 
+  // ⚠ PASTE your Google OAuth "Web application" client ID here to enable Google login.
+  // Leave '' to hide the Google button and use email + master password only.
+  const GOOGLE_CLIENT_ID = '';
+
   const KDF_ITER = 600000;
 
   let encKey     = null;   // CryptoKey (AES-GCM) — kept in memory + chrome.storage.session
@@ -18,7 +22,7 @@ window.Cloud = (function () {
   let pushTimer  = null;
 
   let state = {
-    email: null, token: null, kdfSalt: null, iter: KDF_ITER,
+    email: null, token: null, method: 'password', kdfSalt: null, iter: KDF_ITER,
     version: 0, lastSync: null,
   };
 
@@ -198,9 +202,42 @@ window.Cloud = (function () {
       body: JSON.stringify({ email, kdfSalt: b64e(salt), iterations: KDF_ITER, authHash }),
     });
     encKey = aesKey;
-    state = { email, token: body.token, kdfSalt: b64e(salt), iter: KDF_ITER, version: 0, lastSync: null };
+    state = { email, token: body.token, method: 'password', kdfSalt: b64e(salt), iter: KDF_ITER, version: 0, lastSync: null };
     saveState(); await stashKey();
     await push();                                 // upload whatever is already in the vault
+  }
+
+  // ── Sign in with Google (server-held key) ────────────────────────
+  async function signInWithGoogle() {
+    if (!GOOGLE_CLIENT_ID) throw new Error('Google login is not set up (no client ID in cloud.js)');
+    const redirectUri = chrome.identity.getRedirectURL();
+    const nonce = b64e(crypto.getRandomValues(new Uint8Array(16)));
+    const authUrl = 'https://accounts.google.com/o/oauth2/v2/auth'
+      + '?client_id='     + encodeURIComponent(GOOGLE_CLIENT_ID)
+      + '&response_type='  + 'id_token'
+      + '&redirect_uri='   + encodeURIComponent(redirectUri)
+      + '&scope='          + encodeURIComponent('openid email profile')
+      + '&nonce='          + encodeURIComponent(nonce)
+      + '&prompt='         + 'select_account';
+
+    const responseUrl = await new Promise((resolve, reject) => {
+      chrome.identity.launchWebAuthFlow({ url: authUrl, interactive: true }, r => {
+        if (chrome.runtime.lastError || !r) reject(new Error(chrome.runtime.lastError?.message || 'Google sign-in cancelled'));
+        else resolve(r);
+      });
+    });
+
+    const params  = new URLSearchParams(new URL(responseUrl).hash.slice(1));
+    const idToken = params.get('id_token');
+    if (!idToken) throw new Error('Google did not return a token');
+
+    const { body } = await api('/auth/google', { method: 'POST', body: JSON.stringify({ idToken }) });
+    encKey = await crypto.subtle.importKey('raw', b64d(body.vaultKey), 'AES-GCM', true, ['encrypt', 'decrypt']);
+    let email = state.email;
+    try { email = JSON.parse(atob(idToken.split('.')[1])).email || email; } catch {}
+    state = { email, token: body.token, method: 'google', kdfSalt: null, iter: KDF_ITER, version: 0, lastSync: null };
+    saveState(); await stashKey();
+    await pull();
   }
 
   async function signIn(email, masterPassword) {
@@ -213,12 +250,13 @@ window.Cloud = (function () {
     const { body } = await api('/auth/login', { method: 'POST', body: JSON.stringify({ email, authHash }) });
 
     encKey = aesKey;
-    state = { email, token: body.token, kdfSalt: pre.kdfSalt, iter: pre.iterations, version: 0, lastSync: null };
+    state = { email, token: body.token, method: 'password', kdfSalt: pre.kdfSalt, iter: pre.iterations, version: 0, lastSync: null };
     saveState(); await stashKey();
     await pull();                                 // restore vault onto this device
   }
 
   async function unlock(masterPassword) {
+    if (state.method === 'google') return signInWithGoogle();
     if (!state.email || !state.kdfSalt) throw new Error('Sign in first');
     const salt = b64d(state.kdfSalt);
     const { aesKey, authHash } = await deriveKeys(masterPassword, salt, state.iter);
@@ -234,7 +272,7 @@ window.Cloud = (function () {
   async function signOut() {
     encKey = null;
     await chrome.storage.session.remove('cloud_encKey');
-    state = { email: null, token: null, kdfSalt: null, iter: KDF_ITER, version: 0, lastSync: null };
+    state = { email: null, token: null, method: 'password', kdfSalt: null, iter: KDF_ITER, version: 0, lastSync: null };
     saveState();
     updateStatusUI();
   }
@@ -280,12 +318,17 @@ window.Cloud = (function () {
     const box = el('cloudSync');
     if (!box) return;
 
+    const googleBtn = GOOGLE_CLIENT_ID
+      ? `<div class="cloud-or">or</div><button class="btn btn-ghost" id="cloudGoogleBtn" style="width:100%">Sign in with Google</button>`
+      : '';
+
     if (!state.token) {
       box.innerHTML = `
         <div class="cloud-card">
           <div class="cloud-row"><span class="cloud-dot off"></span><b>Not signed in</b></div>
-          <div class="cloud-sub">Sign in to back up your vault and restore it on another device.
-            Your master password never leaves this device — lose it and the data is unrecoverable.</div>
+          <div class="cloud-sub">Back up your vault and restore it on another device.
+            Email + master password stays zero-knowledge (lose the password = data gone).
+            Google login is more convenient but the server can read those vaults.</div>
           <input type="email" id="cloudEmail" placeholder="email" autocomplete="username">
           <input type="password" id="cloudPass" placeholder="master password (min 10 chars)" autocomplete="current-password">
           <div id="cloudErr" class="cloud-err"></div>
@@ -293,23 +336,26 @@ window.Cloud = (function () {
             <button class="btn btn-sm" id="cloudSignInBtn">Sign in</button>
             <button class="btn btn-ghost" id="cloudRegisterBtn">Create account</button>
           </div>
+          ${googleBtn}
         </div>`;
       el('cloudSignInBtn').onclick   = () => run(() => signIn(el('cloudEmail').value, el('cloudPass').value));
       el('cloudRegisterBtn').onclick = () => run(() => register(el('cloudEmail').value, el('cloudPass').value));
+      if (el('cloudGoogleBtn')) el('cloudGoogleBtn').onclick = () => run(() => signInWithGoogle());
 
     } else if (!encKey) {
+      const isGoogle = state.method === 'google';
       box.innerHTML = `
         <div class="cloud-card">
           <div class="cloud-row"><span class="cloud-dot lock"></span><b>Locked</b> &nbsp;<span class="cloud-sub">${esc(state.email)}</span></div>
-          <div class="cloud-sub">Enter your master password to unlock and sync.</div>
-          <input type="password" id="cloudPass" placeholder="master password" autocomplete="current-password">
+          <div class="cloud-sub">${isGoogle ? 'Continue with Google to unlock and sync.' : 'Enter your master password to unlock and sync.'}</div>
+          ${isGoogle ? '' : '<input type="password" id="cloudPass" placeholder="master password" autocomplete="current-password">'}
           <div id="cloudErr" class="cloud-err"></div>
           <div class="cloud-btns">
-            <button class="btn btn-sm" id="cloudUnlockBtn">Unlock</button>
+            <button class="btn btn-sm" id="cloudUnlockBtn">${isGoogle ? 'Continue with Google' : 'Unlock'}</button>
             <button class="btn btn-ghost" id="cloudSignOutBtn">Sign out</button>
           </div>
         </div>`;
-      el('cloudUnlockBtn').onclick  = () => run(() => unlock(el('cloudPass').value));
+      el('cloudUnlockBtn').onclick  = () => run(() => isGoogle ? signInWithGoogle() : unlock(el('cloudPass').value));
       el('cloudSignOutBtn').onclick = () => run(() => signOut());
 
     } else {
