@@ -34,6 +34,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   prefillUrl();
   bindEvents();
   checkPendingCapture();
+  refreshTotps();
+  setInterval(refreshTotps, 1000);
 
   if (window.Cloud) {
     Cloud.init({
@@ -179,6 +181,10 @@ function bindEvents() {
   const resetPinBtn = document.getElementById('resetMasterPinBtn');
   if (savePinBtn)  savePinBtn.addEventListener('click', saveMasterPin);
   if (resetPinBtn) resetPinBtn.addEventListener('click', resetMasterPin);
+  const genRecBtn   = document.getElementById('genRecoveryBtn');
+  const resetRecBtn = document.getElementById('resetWithRecoveryBtn');
+  if (genRecBtn)   genRecBtn.addEventListener('click', generateRecoveryCode);
+  if (resetRecBtn) resetRecBtn.addEventListener('click', resetPinWithRecovery);
 
   // PIN modal
   document.getElementById('pinModalClose').addEventListener('click', closePinModal);
@@ -360,6 +366,15 @@ function handleEntryClick(e) {
       }
     }
     copyField(value, label);
+  }
+  if (action === 'copy-totp') {
+    const entry = entries.find(x => x.id === id);
+    if (entry && entry.totp) {
+      totpCode(entry.totp)
+        .then(code => navigator.clipboard.writeText(code))
+        .then(() => showToast('2FA code copied'))
+        .catch(() => showToast('Bad 2FA key', 'error'));
+    }
   }
   if (action === 'fill')    triggerAutofill(id);
   if (action === 'delete')  deleteEntry(id);
@@ -688,6 +703,7 @@ function saveEntry() {
   const user  = document.getElementById('addUsername').value.trim();
   const pass  = document.getElementById('addPassword').value;
   const notes = document.getElementById('addNotes').value.trim();
+  const totp  = normalizeTotp(document.getElementById('addTotp').value);
   const selU  = document.getElementById('selUsername').value.trim();
   const selP  = document.getElementById('selPassword').value.trim();
   const selS  = document.getElementById('selSubmit').value.trim();
@@ -699,7 +715,7 @@ function saveEntry() {
   entries.push({
     id:          Date.now().toString(36) + Math.random().toString(36).slice(2),
     label:       label || extractDomain(url),
-    url, username: user, password: pass, notes,
+    url, username: user, password: pass, notes, totp,
     folderId,
     selectors:   { username: selU, password: selP, submit: selS },
     extraFields: extra,
@@ -714,7 +730,7 @@ function saveEntry() {
 }
 
 function clearAddForm() {
-  ['addLabel','addUrl','addUsername','addPassword','addNotes','selUsername','selPassword','selSubmit'].forEach(id => {
+  ['addLabel','addUrl','addUsername','addPassword','addNotes','addTotp','selUsername','selPassword','selSubmit'].forEach(id => {
     document.getElementById(id).value = '';
   });
   document.getElementById('strengthFill').style.width = '0%';
@@ -744,6 +760,7 @@ function openEditModal(id) {
   document.getElementById('editUsername').value    = e.username || '';
   document.getElementById('editPassword').value    = e.password || '';
   document.getElementById('editNotes').value       = e.notes || '';
+  document.getElementById('editTotp').value        = e.totp || '';
   document.getElementById('editFolder').innerHTML  = folderOptionsHtml(e.folderId || '');
   document.getElementById('editSelUsername').value = s.username || '';
   document.getElementById('editSelPassword').value = s.password || '';
@@ -783,6 +800,7 @@ function saveEdit() {
     username:    document.getElementById('editUsername').value.trim(),
     password:    pass,
     notes:       document.getElementById('editNotes').value.trim(),
+    totp:        normalizeTotp(document.getElementById('editTotp').value),
     folderId:    document.getElementById('editFolder').value || null,
     selectors:   {
       username:  document.getElementById('editSelUsername').value.trim(),
@@ -1010,6 +1028,7 @@ function entryCard(e) {
       <div class="entry-creds">
         <div class="cred-field"><span class="cred-label">USER</span><span class="cred-val">${escHtml(e.username)}</span></div>
         <div class="cred-field"><span class="cred-label">PASS</span><span class="cred-val">${masked}</span></div>
+        ${e.totp ? `<div class="cred-field totp-field"><span class="cred-label">2FA</span><span class="totp-code" data-id="${sid}">······</span><span class="totp-secs"></span><button class="btn btn-sm totp-copy" data-action="copy-totp" data-id="${sid}" title="Copy code">⎘</button></div>` : ''}
       </div>
       <div class="sel-pills">${pills.join('')}</div>
       <div class="entry-actions">
@@ -1133,6 +1152,85 @@ function togglePw(inputId, btn) {
   else { inp.type='password'; btn.textContent='👁'; }
 }
 
+// ── TOTP (RFC 6238) ──────────────────────────────────────────────
+function normalizeTotp(s) {
+  return String(s || '').replace(/\s+/g, '').replace(/=+$/, '').toUpperCase();
+}
+function b32decode(s) {
+  const A = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+  let bits = 0, val = 0; const out = [];
+  for (const c of normalizeTotp(s)) {
+    const i = A.indexOf(c);
+    if (i < 0) continue;
+    val = (val << 5) | i; bits += 5;
+    if (bits >= 8) { out.push((val >>> (bits - 8)) & 0xff); bits -= 8; }
+  }
+  return new Uint8Array(out);
+}
+async function totpCode(secret, period = 30, digits = 6) {
+  const key = await crypto.subtle.importKey('raw', b32decode(secret), { name: 'HMAC', hash: 'SHA-1' }, false, ['sign']);
+  const counter = Math.floor(Date.now() / 1000 / period);
+  const buf = new ArrayBuffer(8);
+  new DataView(buf).setUint32(4, counter);
+  const mac = new Uint8Array(await crypto.subtle.sign('HMAC', key, buf));
+  const off = mac[mac.length - 1] & 0xf;
+  const bin = ((mac[off] & 0x7f) << 24) | (mac[off + 1] << 16) | (mac[off + 2] << 8) | mac[off + 3];
+  return String(bin % 10 ** digits).padStart(digits, '0');
+}
+function totpRemaining(period = 30) { return period - Math.floor(Date.now() / 1000) % period; }
+
+async function refreshTotps() {
+  for (const el of document.querySelectorAll('.totp-code')) {
+    const e = entries.find(x => x.id === el.dataset.id);
+    if (!e || !e.totp) continue;
+    try {
+      el.textContent = await totpCode(e.totp);
+      const secs = el.parentElement.querySelector('.totp-secs');
+      if (secs) secs.textContent = totpRemaining() + 's';
+    } catch { el.textContent = 'bad key'; }
+  }
+}
+
+// ── PBKDF2 helper (recovery code hashing) ────────────────────────
+async function pbkdf2B64(text, saltBytes, iter) {
+  const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(text), 'PBKDF2', false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt: saltBytes, iterations: iter, hash: 'SHA-256' }, base, 256);
+  return btoa(String.fromCharCode(...new Uint8Array(bits)));
+}
+function b64ToBytes(b) { return Uint8Array.from(atob(b), c => c.charCodeAt(0)); }
+
+async function generateRecoveryCode() {
+  if (!settings.masterPin) { showToast('Set a Master PIN first', 'error'); return; }
+  const raw = crypto.getRandomValues(new Uint8Array(10));
+  const code = [...raw].map(b => b.toString(16).padStart(2, '0')).join('').toUpperCase().replace(/(.{5})/g, '$1-').replace(/-$/, '');
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const iter = 200000;
+  const hash = await pbkdf2B64(code, salt, iter);
+  settings.pinRecovery = { salt: btoa(String.fromCharCode(...salt)), hash, iter };
+  chrome.storage.local.set({ settings });
+  const blob = new Blob(
+    [`Password Vault — Master PIN recovery code\n\n${code}\n\nKeep this somewhere safe and offline. Anyone with this code can remove your Master PIN (your saved passwords are NOT revealed by it). It works once, then a new code must be generated.\n`],
+    { type: 'text/plain' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = 'pwd-vault-recovery-code.txt'; a.click();
+  showToast('✓ Recovery code saved to file');
+}
+
+async function resetPinWithRecovery() {
+  const rec = settings.pinRecovery;
+  if (!rec) { showToast('No recovery code was generated', 'error'); return; }
+  const entered = (prompt('Enter your recovery code:') || '').trim().toUpperCase();
+  if (!entered) return;
+  const hash = await pbkdf2B64(entered, b64ToBytes(rec.salt), rec.iter || 200000);
+  if (hash !== rec.hash) { showToast('✕ Incorrect recovery code', 'error'); return; }
+  delete settings.masterPin;
+  delete settings.pinRecovery;   // one-time use
+  chrome.storage.local.set({ settings });
+  lockNow({ silent: true });
+  applySettings();
+  showToast('Master PIN removed — set a new one');
+}
+
 // ── SETTINGS ─────────────────────────────────────────────────────
 function applySettings() {
   document.getElementById('toggleAutofill').checked   = settings.autofill;
@@ -1148,6 +1246,8 @@ function applySettings() {
   const activeArea = document.getElementById('pinActiveArea');
   if (setupArea)  setupArea.style.display  = hasPIN ? 'none' : 'flex';
   if (activeArea) activeArea.style.display = hasPIN ? 'flex' : 'none';
+  const recRow = document.getElementById('pinRecoveryRow');
+  if (recRow) recRow.style.display = hasPIN ? 'flex' : 'none';
   if (!hasPIN) {
     const inp = document.getElementById('masterPinInput');
     if (inp) { inp.value = ''; inp.type = 'password'; }
