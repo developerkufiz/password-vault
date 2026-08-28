@@ -3,3 +3,4 @@ node_modules/
 *.log
 .DS_Store
 .ext-signing-key.pem
+password-vault-store.zip

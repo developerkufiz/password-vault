@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Password Vault — Privacy Policy</title>
+<style>
+  body{font:16px/1.6 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;max-width:720px;margin:40px auto;padding:0 20px;color:#1a1a1a}
+  h1{font-size:1.6rem} h2{font-size:1.15rem;margin-top:1.8em}
+  code{background:#f2f2f2;padding:1px 5px;border-radius:4px}
+</style>
+</head>
+<body>
+<h1>Password Vault — Privacy Policy</h1>
+<p><em>Last updated: 28 August 2026</em></p>
+
+<h2>What the extension stores</h2>
+<p>Password Vault stores the credentials you choose to save (website URL,
+username, password, notes, folder names) locally in your browser using
+<code>chrome.storage.local</code>. This data never leaves your device unless
+you explicitly enable Cloud Sync.</p>
+
+<h2>Cloud Sync (optional, off by default)</h2>
+<p>If you turn on Cloud Sync, your vault is sent to and stored on our sync
+server so you can restore it on another device.</p>
+<ul>
+  <li><strong>Email + master password:</strong> your vault is encrypted on your
+  device with a key derived from your master password before it is uploaded.
+  The server stores only ciphertext and cannot read your credentials. The
+  master password is never sent to the server.</li>
+  <li><strong>Sign in with Google:</strong> we receive your Google email address
+  and a Google-issued token to identify your account. For this mode the
+  encryption key is generated and held by the server, so the server is
+  technically able to decrypt that vault.</li>
+</ul>
+
+<h2>What we do not do</h2>
+<p>We do not sell your data, share it with third parties, use it for
+advertising, or use it for any purpose other than syncing your vault between
+your own devices.</p>
+
+<h2>Data deletion</h2>
+<p>Signing out and clearing the extension's storage removes all local data.
+Deleting your sync account removes your stored vault from the server
+permanently.</p>
+
+<h2>Contact</h2>
+<p>developer.kufiz@gmail.com</p>
+</body>
+</html>

@@ -20,10 +20,11 @@ window.Cloud = (function () {
   let tombstones = [];     // [{ id, updated }] deleted-entry markers, so deletes sync
   let onChange   = () => {};
   let pushTimer  = null;
+  let pending    = null;   // { remote, rCount, localCount } — backup found, waiting on user choice
 
   let state = {
     email: null, token: null, method: 'password', kdfSalt: null, iter: KDF_ITER,
-    version: 0, lastSync: null,
+    version: 0, lastSync: null, recovered: false,
   };
 
   // ── helpers ──────────────────────────────────────────────────────
@@ -148,6 +149,43 @@ window.Cloud = (function () {
     chrome.storage.local.set({ vault: entries, folders });
   }
 
+  // ── recovery: on first sign-in, detect an existing backup ────────
+  async function maybeRecover() {
+    const { body } = await api('/vault', { method: 'GET' });
+    state.version = body.version || 0;
+    const localCount = (typeof entries !== 'undefined') ? entries.length : 0;
+
+    if (body.blob) {
+      const remote = await decryptVault(body.blob, body.iv);
+      if (localCount === 0) {                       // nothing to lose — just restore
+        mergeIntoLocal(remote);
+      } else {                                      // both sides have data — ask
+        pending = { remote, rCount: (remote.entries || []).length, localCount };
+        updateStatusUI();
+        return;
+      }
+    } else {
+      await push();                                 // no backup yet — upload local
+    }
+    state.recovered = true;
+    state.lastSync  = new Date().toISOString();
+    saveState();
+    onChange();
+  }
+
+  async function recover(mode) {
+    if (!pending) return;
+    if (mode === 'replace') { entries.length = 0; folders.length = 0; tombstones = []; saveTombstones(); }
+    if (mode !== 'skip') mergeIntoLocal(pending.remote);
+    pending = null;
+    state.recovered = true;
+    chrome.storage.local.set({ vault: entries, folders });
+    onChange();
+    await push();                                   // reconcile the server with the result
+    state.lastSync = new Date().toISOString();
+    saveState();
+  }
+
   // ── pull / push ──────────────────────────────────────────────────
   async function pull() {
     if (!encKey) throw new Error('Locked — enter your master password');
@@ -202,7 +240,7 @@ window.Cloud = (function () {
       body: JSON.stringify({ email, kdfSalt: b64e(salt), iterations: KDF_ITER, authHash }),
     });
     encKey = aesKey;
-    state = { email, token: body.token, method: 'password', kdfSalt: b64e(salt), iter: KDF_ITER, version: 0, lastSync: null };
+    state = { email, token: body.token, method: 'password', kdfSalt: b64e(salt), iter: KDF_ITER, version: 0, lastSync: null, recovered: true };
     saveState(); await stashKey();
     await push();                                 // upload whatever is already in the vault
   }
@@ -235,9 +273,9 @@ window.Cloud = (function () {
     encKey = await crypto.subtle.importKey('raw', b64d(body.vaultKey), 'AES-GCM', true, ['encrypt', 'decrypt']);
     let email = state.email;
     try { email = JSON.parse(atob(idToken.split('.')[1])).email || email; } catch {}
-    state = { email, token: body.token, method: 'google', kdfSalt: null, iter: KDF_ITER, version: 0, lastSync: null };
+    state = { email, token: body.token, method: 'google', kdfSalt: null, iter: KDF_ITER, version: 0, lastSync: null, recovered: false };
     saveState(); await stashKey();
-    await pull();
+    await maybeRecover();
   }
 
   async function signIn(email, masterPassword) {
@@ -250,9 +288,9 @@ window.Cloud = (function () {
     const { body } = await api('/auth/login', { method: 'POST', body: JSON.stringify({ email, authHash }) });
 
     encKey = aesKey;
-    state = { email, token: body.token, method: 'password', kdfSalt: pre.kdfSalt, iter: pre.iterations, version: 0, lastSync: null };
+    state = { email, token: body.token, method: 'password', kdfSalt: pre.kdfSalt, iter: pre.iterations, version: 0, lastSync: null, recovered: false };
     saveState(); await stashKey();
-    await pull();                                 // restore vault onto this device
+    await maybeRecover();                         // restore vault onto this device
   }
 
   async function unlock(masterPassword) {
@@ -265,6 +303,7 @@ window.Cloud = (function () {
     });
     encKey = aesKey;
     state.token = body.token;
+    state.recovered = true;
     saveState(); await stashKey();
     await pull();
   }
@@ -342,6 +381,23 @@ window.Cloud = (function () {
       el('cloudRegisterBtn').onclick = () => run(() => register(el('cloudEmail').value, el('cloudPass').value));
       if (el('cloudGoogleBtn')) el('cloudGoogleBtn').onclick = () => run(() => signInWithGoogle());
 
+    } else if (pending) {
+      box.innerHTML = `
+        <div class="cloud-card">
+          <div class="cloud-row"><span class="cloud-dot lock"></span><b>Backup found</b> &nbsp;<span class="cloud-sub">${esc(state.email)}</span></div>
+          <div class="cloud-sub">This account has a saved vault with ${pending.rCount} entr${pending.rCount === 1 ? 'y' : 'ies'}.
+            You have ${pending.localCount} on this device.</div>
+          <div id="cloudErr" class="cloud-err"></div>
+          <div class="cloud-btns">
+            <button class="btn btn-sm" id="cloudRecReplace">Use backup</button>
+            <button class="btn btn-ghost" id="cloudRecMerge">Merge both</button>
+            <button class="btn btn-ghost" id="cloudRecSkip">Keep mine</button>
+          </div>
+        </div>`;
+      el('cloudRecReplace').onclick = () => run(() => recover('replace'));
+      el('cloudRecMerge').onclick   = () => run(() => recover('merge'));
+      el('cloudRecSkip').onclick    = () => run(() => recover('skip'));
+
     } else if (!encKey) {
       const isGoogle = state.method === 'google';
       box.innerHTML = `
@@ -384,7 +440,8 @@ window.Cloud = (function () {
     await loadStashedKey();
     updateStatusUI();
     if (state.token && encKey) {
-      try { await pull(); } catch (e) { console.warn('[Cloud] initial sync failed:', e.message); updateStatusUI(); }
+      try { state.recovered ? await pull() : await maybeRecover(); }
+      catch (e) { console.warn('[Cloud] initial sync failed:', e.message); updateStatusUI(); }
     }
   }
 
