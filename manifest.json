@@ -1,20 +1,18 @@
 {
   "manifest_version": 3,
   "name": "Password Vault",
-  "version": "3.13.0",
-  "description": "Password manager for developers. Save, find and auto-fill logins by URL. Optional zero-knowledge or Google cloud sync.",
+  "version": "3.15.0",
+  "description": "Password manager for developers. Save, find and auto-fill logins by URL. Optional end-to-end encrypted cross-device sync.",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAzQjkurIgB0HK+O+hrZdB5LfpE9EI1upCJP62GAN7hpjGYO95YTe88cddNl04BHq4jPxDn5YII0WNNUdj80UHJwk5fRSJElKUa8VgqXtKDNt591F8YniOyiWu3QY7p9qK5nRcHi1xY2WbYQoiP4T80T9Tki1enhValHU1pvFy1lUpbIHF/n3nua9V1248/Dsa3uoUEH3KBeF5KOwK16dShlotg38q437VJEkYEn5i0qNBHcAqnjFmohFtZHVBcxple5LYH0Mpp5Of2CPIxaUwEiEBhvr4LLH6XwBIwcObd+R2HkF5iJGI63wxOHO1D10m9wGtvwyJWSkxCOVjP1i8HQIDAQAB",
   "permissions": [
     "storage",
     "activeTab",
     "scripting",
     "tabs",
-    "identity",
     "alarms"
   ],
   "host_permissions": [
-    "<all_urls>",
-    "https://*.onrender.com/*"
+    "<all_urls>"
   ],
   "action": {
     "default_popup": "popup.html",
@@ -51,15 +49,5 @@
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
-  },
-  "web_accessible_resources": [
-    {
-      "resources": [
-        "Password-Vault-User-Guide.docx"
-      ],
-      "matches": [
-        "<all_urls>"
-      ]
-    }
-  ]
+  }
 }

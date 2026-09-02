@@ -41,7 +41,7 @@
 <div class="wrap">
   <header>
     <h1>Password <span>Vault</span> — Privacy Policy</h1>
-    <div class="updated">Last updated: 28 August 2026</div>
+    <div class="updated">Last updated: 2 September 2026</div>
   </header>
 
   <div class="card">
@@ -54,18 +54,15 @@
 
   <div class="card">
     <h2><span class="dot"></span>Cloud Sync (optional, off by default)</h2>
-    <p>If you turn on Cloud Sync, your vault is sent to and stored on our sync
-    server so you can restore it on another device.</p>
-    <ul>
-      <li><strong>Email + master password:</strong> your vault is encrypted on
-      your device with a key derived from your master password before upload.
-      The server stores only ciphertext and cannot read your credentials. Your
-      master password is never sent to the server.</li>
-      <li><strong>Sign in with Google:</strong> we receive your Google email
-      address and a Google-issued token to identify your account. In this mode
-      the encryption key is generated and held by the server, so the server is
-      technically able to decrypt that vault.</li>
-    </ul>
+    <p>If you turn on Cloud Sync, your vault is encrypted on your device with a
+    key derived (PBKDF2 &rarr; AES-GCM) from a sync passphrase that you choose.
+    The passphrase, and the encryption key, never leave your device.</p>
+    <p>The resulting ciphertext is stored using
+    <code>chrome.storage.sync</code>, which your browser replicates across the
+    devices signed in to your Chrome profile. We do not operate a sync server,
+    we do not have an account system, and we never receive your vault, your
+    passphrase or your credentials. If you lose the passphrase the synced data
+    cannot be recovered by anyone.</p>
   </div>
 
   <div class="card">
@@ -77,16 +74,17 @@
 
   <div class="card">
     <h2><span class="dot"></span>What we do not do</h2>
-    <p>We do not sell your data, transfer it to third parties, use it for
-    advertising, use it to assess creditworthiness, or use it for any purpose
-    other than syncing your vault between your own devices.</p>
+    <p>We do not collect, receive, sell or transfer your data to anyone, use it
+    for advertising, or use it to assess creditworthiness. The extension has no
+    analytics and no backend of any kind.</p>
   </div>
 
   <div class="card">
     <h2><span class="dot"></span>Data deletion</h2>
-    <p>Signing out and clearing the extension's storage removes all local data.
-    Deleting your sync account permanently removes your stored vault from the
-    server.</p>
+    <p>Removing the extension, or using "Disable sync" and clearing the
+    extension's storage, deletes all of its data. Synced ciphertext is removed
+    from <code>chrome.storage.sync</code> when you disable sync or uninstall the
+    extension on your devices.</p>
   </div>
 
   <div class="card">

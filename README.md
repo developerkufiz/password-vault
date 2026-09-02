@@ -1,55 +1,68 @@
 # 🔐 Password Vault — Chrome Extension
 
-A developer-grade password manager Chrome extension with a dark terminal aesthetic.
+A lightweight, keyboard-driven password manager for Chrome, built for developers.
+Dark terminal aesthetic. No account, no server.
+
+**Full documentation: [USER-GUIDE.md](USER-GUIDE.md)**
 
 ## Features
-- **Vault** — Store credentials keyed to exact URLs
-- **Folders** — Group credentials (PRD / UAT / DEV by default, renameable & custom), each with its own colour
-- **Auto-fill** — Injects username/password when you navigate to a matching URL
-- **Auto-submit** — Optionally clicks the login button after filling
-- **Password strength meter** — Visual indicator on entry
-- **Search** — Filter credentials instantly
-- **Export/Import** — vault.json backup
-- **Dark dev theme** — JetBrains Mono, scanlines, terminal glows
 
-## Install in Chrome
+- **Vault** — save logins, find them instantly by label / URL / username, with match badges for the current page
+- **Folders** — group credentials into your own colour-coded folders
+- **Auto-fill** — injects username / password on a matching URL, or on demand via `Ctrl+Shift+L`
+- **Auto-capture** — detects successful logins and offers to save them (handles broken / AJAX / no-`<form>` pages)
+- **TOTP (2FA)** — store the secret, get a live code on the card
+- **Keyboard navigation** — `↑` / `↓` / `Enter` / `Esc` in the vault list
+- **Master PIN** — 6-digit PIN with idle auto-lock, failed-attempt lockout, and a one-time recovery code
+- **Local encryption** (opt-in) — passwords stored as AES-GCM ciphertext on disk, unlocked by a passphrase
+- **Cloud Sync** (opt-in) — end-to-end encrypted, synced via `chrome.storage.sync` across your Chrome profile. No server, no account.
+- **Import / export** — `vault.json` backup, plus CSV import from Chrome, Bitwarden, etc.
+- **Password health** — scan for weak / reused / old passwords
+- **Clipboard safety** — copied passwords are cleared after 20 s and when the popup closes
+- **Dark / light theme**
 
-1. Unzip / open this folder
-2. Open Chrome → navigate to `chrome://extensions`
-3. Enable **Developer Mode** (top-right toggle)
-4. Click **Load unpacked**
-5. Select the `password-vault` folder
-6. The extension icon appears in your toolbar
+## Install
 
-## Usage
+### Chrome Web Store
+Search for "Password Vault" and click **Add to Chrome**.
 
-### Add a credential
-1. Click the extension icon on any login page
-2. Go to **+ Add** tab
-3. The URL is pre-filled from the active tab
-4. Enter your username, password, optional notes
-5. Click **Encrypt & Store**
+### Unpacked (development)
+1. Open `chrome://extensions`
+2. Enable **Developer Mode** (top-right)
+3. **Load unpacked** → select this folder
 
-### Auto-fill
-- When you navigate to a saved URL, credentials are auto-injected (if enabled in **Config**)
-- Or click the extension → **Vault** → **⚡ Fill** button on the matching entry
+## Cloud Sync
 
-### Export / Import
-- **Config** tab → Export `vault.json` (plain JSON, back it up safely!)
-- Import a previously exported file to merge entries
+Optional and off by default. Turn it on in **Config → General → Cloud Sync** with a
+passphrase (min 10 chars), then enter the **same passphrase** on your other devices.
+The vault is encrypted on-device (PBKDF2 → AES-GCM); only ciphertext is stored in
+`chrome.storage.sync`. The passphrase never leaves your device — lose it and the
+synced copy is unrecoverable. Practical limit ≈ 90 KB (~100–150 credentials).
 
-## File Structure
+## File structure
+
 ```
 password-vault/
-├── manifest.json      # Extension config (Manifest V3)
-├── popup.html         # Main UI
-├── popup.js           # Popup logic
-├── content.js         # Injected into pages for auto-fill
-├── background.js      # Service worker for tab monitoring
-└── icons/             # Extension icons
+├── manifest.json   # Manifest V3 config
+├── popup.html      # UI + styles
+├── popup.js        # popup logic
+├── cloud.js        # end-to-end encrypted sync (chrome.storage.sync)
+├── content.js      # page-side auto-fill / capture
+├── background.js   # service worker (auto-lock alarm, tab monitoring)
+├── icons/
+├── USER-GUIDE.md   # full user guide
+└── build-store.sh  # builds password-vault-store.zip (strips the dev key)
 ```
 
-## Security Notes
-> Passwords are stored in **Chrome's local storage** (chrome.storage.local),  
-> which is sandboxed to the extension and not accessible by websites.  
-> This is NOT encrypted at rest — treat your exported vault.json as sensitive.
+## Security notes
+
+- Credentials live in `chrome.storage.local` — sandboxed to the extension, never sent to any server.
+- The Master PIN is a UI gate, not an encryption key. For encryption at rest, enable **Encrypt local vault**.
+- **Reset & Wipe**, and losing a sync / encryption passphrase, are unrecoverable — keep `vault.json` exports.
+
+## Credits
+
+Built by **Tengku Mohamad Syafiz** —
+[Instagram](https://www.instagram.com/tengkusyafiz/) ·
+[LinkedIn](https://www.linkedin.com/in/tengku-syafiz-06bb2b12a/) ·
+[Buy me a coffee](https://buymeacoffee.com/tengkusyafiz)

@@ -8,11 +8,7 @@ let currentTab = null;
 let pendingCapture = null;
 let folders = [];
 
-const DEFAULT_FOLDERS = [
-  { id: 'f_prd', name: 'PRD', color: '#ff4060', order: 0 },
-  { id: 'f_uat', name: 'UAT', color: '#ffb020', order: 1 },
-  { id: 'f_dev', name: 'DEV', color: '#00b4ff', order: 2 },
-];
+const DEFAULT_FOLDERS = [];
 
 // ── INIT ───────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
@@ -30,6 +26,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   renderLockoutList();
   setupTabs();
   setupSearch();
+  setupKeyboardNav();
   updateSortBtn();
   prefillUrl();
   bindEvents();
@@ -155,6 +152,12 @@ function bindEvents() {
   setInterval(() => {
     if (settings.masterPin && _unlockAt != null && !isUnlocked()) lockNow({ silent: true });
   }, 10000);
+  // Auto-lock + clear clipboard when the popup is dismissed
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'hidden') return;
+    if (_clipGuard) doClipboardClear(_clipGuard);
+    if (settings.masterPin && _unlockAt != null && settings.autoLockMin > 0) lockNow({ silent: true });
+  });
   // Folders
   document.getElementById('addFolderBtn').addEventListener('click', addFolder);
   const fm = document.getElementById('folderManager');
@@ -220,7 +223,6 @@ function bindEvents() {
   });
 
   document.getElementById('exportBtn').addEventListener('click', exportJSON);
-  document.getElementById('downloadDocsBtn').addEventListener('click', downloadDocs);
   document.getElementById('importBtn').addEventListener('click', () => document.getElementById('importFile').click());
   document.getElementById('importFile').addEventListener('change', importJSON);
   document.getElementById('wipeBtn').addEventListener('click', clearVault);
@@ -383,8 +385,8 @@ function handleEntryClick(e) {
     const entry = entries.find(x => x.id === id);
     if (entry && entry.totp) {
       totpCode(entry.totp)
-        .then(code => navigator.clipboard.writeText(code))
-        .then(() => showToast('2FA code copied'))
+        .then(code => navigator.clipboard.writeText(code).then(() => code))
+        .then(code => { scheduleClipboardClear(code); showToast('2FA code copied'); })
         .catch(() => showToast('Bad 2FA key', 'error'));
     }
   }
@@ -529,6 +531,7 @@ function refreshFolderSelects() {
 function renderFolderManager() {
   const box = document.getElementById('folderManager');
   if (!box) return;
+  if (!document.getElementById('panel-settings')?.classList.contains('active')) return;
   if (!folders.length) { box.innerHTML = '<div class="lockout-empty">No folders — add one below</div>'; return; }
   box.innerHTML = folders
     .slice().sort((a, b) => (a.order || 0) - (b.order || 0))
@@ -599,7 +602,8 @@ function setupTabs() {
       document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
       btn.classList.add('active');
       document.getElementById('panel-' + btn.dataset.tab).classList.add('active');
-      if (btn.dataset.tab === 'settings') { renderLockoutList(); renderFolderManager(); }
+      if (btn.dataset.tab === 'settings') { renderLockoutList(); renderFolderManager(); renderStats(); }
+      if (btn.dataset.tab === 'vault') renderVault(currentSearch());
     });
   });
 
@@ -889,8 +893,48 @@ function updateSortBtn() {
 }
 
 // ── VAULT RENDER ───────────────────────────────────────────────────
+function debounce(fn, ms) {
+  let t;
+  return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); };
+}
 function setupSearch() {
-  document.getElementById('searchInput').addEventListener('input', e => renderVault(e.target.value.toLowerCase()));
+  const run = debounce(v => renderVault(v), 140);
+  document.getElementById('searchInput').addEventListener('input', e => run(e.target.value.toLowerCase()));
+}
+
+// ── KEYBOARD NAV (vault list) ─────────────────────────────────────
+let _navIdx = -1;
+function navCards() {
+  return [...document.querySelectorAll('#entryList .entry-card')].filter(c => c.offsetParent !== null);
+}
+function setNav(idx, cards) {
+  cards = cards || navCards();
+  cards.forEach(c => c.classList.remove('kbd-focus'));
+  if (!cards.length) { _navIdx = -1; return; }
+  _navIdx = Math.max(0, Math.min(idx, cards.length - 1));
+  const el = cards[_navIdx];
+  el.classList.add('kbd-focus');
+  el.scrollIntoView({ block: 'nearest' });
+}
+function setupKeyboardNav() {
+  document.getElementById('panel-vault').addEventListener('keydown', e => {
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      const cards = navCards();
+      if (!cards.length) return;
+      e.preventDefault();
+      setNav(_navIdx < 0 ? 0 : _navIdx + (e.key === 'ArrowDown' ? 1 : -1), cards);
+    } else if (e.key === 'Enter' && _navIdx >= 0) {
+      const card = navCards()[_navIdx];
+      if (!card) return;
+      e.preventDefault();
+      const fill = card.querySelector('[data-action="fill"]');
+      if (fill) fill.click();
+      else card.querySelector('.entry-header')?.click();
+    } else if (e.key === 'Escape') {
+      const s = document.getElementById('searchInput');
+      if (s.value) { s.value = ''; renderVault(''); }
+    }
+  });
 }
 
 function isExactUrlMatch(stored, current) {
@@ -915,12 +959,14 @@ function getMatchPriority(entry, currentUrl, currentUsername) {
   return 4;                            // No match
 }
 
+let _usernameCache; // undefined = not fetched yet; null/string = fetched (cached for popup lifetime)
 async function detectCurrentUsername() {
   if (!currentTab) return null;
+  if (_usernameCache !== undefined) return _usernameCache;
   return new Promise(resolve => {
     chrome.tabs.sendMessage(currentTab.id, { action: 'getCurrentUsername' }, resp => {
-      if (chrome.runtime.lastError || !resp?.username) resolve(null);
-      else resolve(resp.username);
+      _usernameCache = (chrome.runtime.lastError || !resp?.username) ? null : resp.username;
+      resolve(_usernameCache);
     });
   });
 }
@@ -961,6 +1007,7 @@ function renderVault(filter = '') {
 
 // Render entries flat, or bucketed into folder groups (order within each group preserved)
 function paintVault(list, sorted, grouped) {
+  _navIdx = -1;
   if (!grouped || !folders.length) {
     list.innerHTML = sorted.map(entryCard).join('');
     restoreCollapsedState(list);
@@ -1155,8 +1202,24 @@ function deleteEntry(id) {
   persist(); renderVault(); renderStats(); showToast('Entry deleted');
 }
 
+const CLIP_CLEAR_MS = 20000;
+let _clipGuard = null;
+function scheduleClipboardClear(value) {
+  _clipGuard = value;
+  setTimeout(() => { if (_clipGuard === value) doClipboardClear(value); }, CLIP_CLEAR_MS);
+}
+async function doClipboardClear(value) {
+  _clipGuard = null;
+  try { if ((await navigator.clipboard.readText()) !== value) return; } catch {}
+  try { await navigator.clipboard.writeText(''); } catch {}
+}
+
 function copyField(enc, label) {
-  navigator.clipboard.writeText(decodeURIComponent(enc)).then(() => showToast(`${label} copied`));
+  const text = decodeURIComponent(enc);
+  navigator.clipboard.writeText(text).then(() => {
+    showToast(`${label} copied`);
+    if (label === 'Password') scheduleClipboardClear(text);
+  });
 }
 
 function urlMatches(stored, current) {
@@ -1415,19 +1478,13 @@ function saveSetting(key, value) { settings[key]=value; chrome.storage.local.set
 
 // ── STATS ─────────────────────────────────────────────────────────
 function renderStats() {
+  if (!document.getElementById('panel-settings')?.classList.contains('active')) return;
   document.getElementById('statTotal').textContent  = entries.length;
   document.getElementById('statSites').textContent  = new Set(entries.map(e => extractDomain(e.url))).size;
   document.getElementById('statStrong').textContent = entries.filter(e => e.strength >= 3).length;
 }
 
 // ── EXPORT / IMPORT ───────────────────────────────────────────────
-function downloadDocs() {
-  const url = chrome.runtime.getURL('Password-Vault-User-Guide.docx');
-  const a   = document.createElement('a');
-  a.href     = url;
-  a.download = 'Password-Vault-User-Guide.docx';
-  a.click();
-}
 
 function exportJSON() {
   // Always require PIN on export if master PIN is configured
