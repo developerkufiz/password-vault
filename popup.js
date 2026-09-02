@@ -601,7 +601,7 @@ function setupTabs() {
       document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
       document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
       btn.classList.add('active');
-      document.getElementById('panel-' + btn.dataset.tab).classList.add('active');
+      document.getElementById('panel-' + btn.dataset.tab)?.classList.add('active');
       if (btn.dataset.tab === 'settings') { renderLockoutList(); renderFolderManager(); renderStats(); }
       if (btn.dataset.tab === 'vault') renderVault(currentSearch());
     });
@@ -613,7 +613,7 @@ function setupTabs() {
       panel.querySelectorAll('.subtab').forEach(t => t.classList.remove('active'));
       panel.querySelectorAll('.subpanel').forEach(p => p.classList.remove('active'));
       btn.classList.add('active');
-      panel.querySelector('#sub-' + btn.dataset.sub).classList.add('active');
+      panel.querySelector('#sub-' + btn.dataset.sub)?.classList.add('active');
     });
   });
 }
