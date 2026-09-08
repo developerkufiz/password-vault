@@ -19,30 +19,22 @@ Produces `password-vault-store.zip` (extension files only — no server, no docs
 1. Dev console → **Add new item** → upload `password-vault-store.zip`.
 2. After upload, the console shows the **Item ID**. Copy it.
 
-### Fix the Google login redirect URI
-
-The published Item ID may differ from the current unpacked ID
-(`lapfpjnljamfbljfimlokofnhgpakjhc`). If it does:
-
-1. https://console.cloud.google.com → your project → **APIs & Services →
-   Credentials** → your OAuth client.
-2. Under **Authorized redirect URIs**, **add**:
-   `https://<ITEM_ID>.chromiumapp.org/`
-   (keep the old one too — both can coexist.)
-3. Save. No code change needed; `chrome.identity.getRedirectURL()` picks the
-   right one automatically.
-
 ## 4. Fill the store listing
 
 | Field | Value |
 |-------|-------|
 | Name | Password Vault |
-| Summary | Store, retrieve, and auto-fill credentials by URL. Optional cloud sync. |
+| Summary | Store, retrieve, and auto-fill credentials by URL. Optional encrypted sync. |
 | Category | Productivity / Workflow & Planning |
 | Language | English |
 | Description | (below) |
 | Icon | `icons/icon128.png` |
 | Screenshots | 1280×800 or 640×400 PNG — at least one required. Take from the popup. |
+
+> **Metadata policy:** keep the description strictly about features. No
+> donation, social, "buy me a coffee", or unrelated URLs in the description,
+> screenshots, or promo images — Chrome rejects those as keyword spam.
+> Support/social links belong only inside the extension UI.
 
 **Description:**
 
@@ -50,16 +42,16 @@ The published Item ID may differ from the current unpacked ID
 Password Vault is a developer-focused password manager for Chrome.
 
 • Save credentials and auto-fill them by matching the page URL
-• Organize entries into folders, search instantly
+• Organize entries into folders and search instantly
 • Master PIN lock with lockout protection
-• Optional cloud sync so you can restore your vault on a new machine:
-   – Email + master password: zero-knowledge, the server only ever sees
-     encrypted data
-   – Sign in with Google: convenient one-click restore
-• On first sign-in, if a backup already exists you choose to use it,
-  merge, or keep your local data
+• TOTP (2FA) code generation per entry
+• Optional end-to-end encrypted sync to restore your vault on another
+  device — protected by a separate sync passphrase; only encrypted data
+  ever leaves your browser
+• Import from Chrome, Bitwarden, and other CSV exports
+• Optional local encryption of the on-device vault
 
-Your data stays on your device unless you turn on cloud sync.
+Your data stays on your device unless you enable sync.
 ```
 
 ## 5. Privacy & permissions (required)
@@ -67,15 +59,15 @@ Your data stays on your device unless you turn on cloud sync.
 - **Single purpose:** "Store and auto-fill website credentials."
 - **Permission justifications:**
   - `storage` — save the vault locally
-  - `activeTab` / `scripting` — fill the login form on the current page
-  - `tabs` — read the current tab URL to match the right credential
-  - `identity` — optional "Sign in with Google" for cloud sync
-  - `host_permissions <all_urls>` — auto-fill must work on any site the user saves a login for
-- **Data usage:** discloses that with cloud sync enabled, encrypted vault data
-  (and, for Google login, the vault key) is sent to the sync server. No selling,
-  no unrelated use.
-- Add a **Privacy policy URL** (Chrome requires one when `identity` / remote
-  data is used). A short page on GitHub Pages or a gist is fine.
+  - `tabs` — read the current tab URL to match the right saved credential
+  - `alarms` — periodic auto-lock / sync check
+  - `host_permissions <all_urls>` — the content script auto-fills the login
+    form on any site the user has saved a login for
+- **Data usage:** with sync enabled, only an end-to-end encrypted vault blob is
+  stored in `chrome.storage.sync`. No server, no plaintext, no selling, no
+  unrelated use.
+- Add a **Privacy policy URL** (hosted at
+  developerkufiz.github.io/password-vault/privacy-policy.html).
 
 ## 6. Submit
 
