@@ -1,6 +1,12 @@
 // ── background.js — PWD VAULT by KuFiz ──────────────────────────
 'use strict';
 
+// Fresh installs have no `settings` key in storage until the user opens
+// Config — without these defaults, settings.autofill reads as undefined
+// (falsy) and autofill silently never fires for a first-time save.
+const DEFAULT_SETTINGS = { autofill: true, autosubmit: false, maxAttempts: 5 };
+function withDefaults(settings) { return { ...DEFAULT_SETTINGS, ...(settings || {}) }; }
+
 // ── AUTO-FILL ON TAB LOAD ─────────────────────────────────────────
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (changeInfo.status !== 'complete' || !tab.url) return;
@@ -9,7 +15,7 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   chrome.storage.local.get(['settings','attempts'], result => {
    readVault((entries) => {
     if (!entries) { console.log('[PWD Vault] local vault is locked — open the popup to unlock'); return; }
-    const settings = result.settings || {};
+    const settings = withDefaults(result.settings);
     const attempts = result.attempts || {};
     const max      = settings.maxAttempts || 5;
 
@@ -116,7 +122,7 @@ chrome.commands.onCommand.addListener(command => {
     chrome.storage.local.get(['settings','attempts'], result => {
      readVault((entries) => {
       if (!entries) { console.warn('[PWD Vault] shortcut: local vault is locked'); return; }
-      const settings = result.settings || {};
+      const settings = withDefaults(result.settings);
       const attempts = result.attempts || {};
       const max      = settings.maxAttempts || 5;
 
@@ -156,7 +162,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       readVault((entries) => {
         const entry = (entries || []).find(e => e.id === msg.entryId);
         if (!entry || !sender.tab) return;
-        fillChosenAccount(entry, sender.tab.id, sender.tab.url, result.settings || {}, result.attempts || {});
+        fillChosenAccount(entry, sender.tab.id, sender.tab.url, withDefaults(result.settings), result.attempts || {});
       });
     });
     return true;
@@ -167,7 +173,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     chrome.storage.local.get(['settings','attempts'], result => {
      readVault((entries) => {
       if (!entries) { sendResponse({ match: null, locked: true }); return; }
-      const settings = result.settings || {};
+      const settings = withDefaults(result.settings);
       const attempts = result.attempts || {};
       const max      = settings.maxAttempts || 5;
       const match = entries.find(e => urlMatches(e.url, msg.url));
