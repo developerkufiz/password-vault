@@ -105,7 +105,7 @@ chrome.alarms.onAlarm.addListener(a => {
       const mins = (r.settings || {}).autoLockMin;
       if (!mins || mins <= 0) return;
       if (Date.now() - at >= mins * 60000) {
-        chrome.storage.session.remove(['pv_unlock', 'cloud_encKey']);
+        chrome.storage.session.remove(['pv_unlock', 'cloud_encKey', 'pv_datakey']);
       }
     });
   });

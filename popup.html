@@ -788,14 +788,14 @@
   <div class="setting-row">
     <div class="setting-info">
       <div class="setting-name">Master PIN</div>
-      <div class="setting-desc">6-digit PIN. Once set, input is locked. Reset wipes PIN + all credentials.</div>
+      <div class="setting-desc">6-12 digit PIN. Once set, input is locked. Reset wipes PIN + all credentials.</div>
     </div>
     <div style="display:flex;gap:6px;align-items:center;">
       <!-- No PIN: show setup input -->
       <div id="pinSetupArea" style="display:flex;gap:6px;align-items:center;">
-        <div class="pw-wrap" style="width:106px">
-          <input type="password" id="masterPinInput" placeholder="6-digit PIN" maxlength="6" inputmode="numeric"
-            style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:5px;padding:6px 28px 6px 9px;font-family:var(--font-mono);font-size:14px;letter-spacing:4px;color:var(--text1);outline:none;">
+        <div class="pw-wrap" style="width:150px">
+          <input type="password" id="masterPinInput" placeholder="6-12 digits" maxlength="12" inputmode="numeric"
+            style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:5px;padding:6px 28px 6px 9px;font-family:var(--font-mono);font-size:14px;letter-spacing:2px;color:var(--text1);outline:none;">
           <button class="pw-eye" id="masterPinEye" style="right:5px">👁</button>
         </div>
         <button class="btn btn-sm" id="saveMasterPinBtn">Save</button>
@@ -886,7 +886,7 @@
       <div class="field" style="margin-bottom:6px">
         <div class="field-label" style="margin-bottom:6px"><span class="acc">//</span> Master PIN required to reveal password</div>
         <div class="pw-wrap">
-          <input type="password" id="pinInput" placeholder="• • • • • •" maxlength="6" inputmode="numeric" pattern="[0-9]*"
+          <input type="password" id="pinInput" placeholder="• • • • • •" maxlength="12" inputmode="numeric" pattern="[0-9]*"
             style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:5px;padding:8px 36px 8px 11px;font-family:var(--font-mono);font-size:16px;color:var(--text1);outline:none;letter-spacing:4px;text-align:center;">
           <button class="pw-eye" id="pinEye">👁</button>
         </div>

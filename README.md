@@ -13,7 +13,7 @@ Dark terminal aesthetic. No account, no server.
 - **Auto-capture** — detects successful logins and offers to save them (handles broken / AJAX / no-`<form>` pages)
 - **TOTP (2FA)** — store the secret, get a live code on the card
 - **Keyboard navigation** — `↑` / `↓` / `Enter` / `Esc` in the vault list
-- **Master PIN** — 6-digit PIN with idle auto-lock, failed-attempt lockout, and a one-time recovery code
+- **Master PIN** — 6-12 digit PIN (stored hashed) with idle auto-lock, failed-attempt lockout, and a one-time recovery code
 - **Local encryption** (opt-in) — passwords stored as AES-GCM ciphertext on disk, unlocked by a passphrase
 - **Cloud Sync** (opt-in) — end-to-end encrypted, synced via `chrome.storage.sync` across your Chrome profile. No server, no account.
 - **Import / export** — `vault.json` backup, plus CSV import from Chrome, Bitwarden, etc.

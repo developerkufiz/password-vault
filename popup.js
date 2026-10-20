@@ -184,7 +184,7 @@ function bindEvents() {
       }
     });
     masterInp.addEventListener('input', () => {
-      masterInp.style.borderColor = masterInp.value.length === 6 ? 'var(--accent)' : '';
+      masterInp.style.borderColor = masterInp.value.length >= 6 ? 'var(--accent)' : '';
     });
   }
   const savePinBtn  = document.getElementById('saveMasterPinBtn');
@@ -224,8 +224,8 @@ function bindEvents() {
     }
   });
   pinInputEl.addEventListener('input', () => {
-    // Auto-confirm when 6 digits entered
-    if (pinInputEl.value.length === 6) setTimeout(confirmPin, 120);
+    // Auto-confirm once the PIN's length is reached
+    if (pinInputEl.value.length === ((settings.masterPin && settings.masterPin.len) || 6)) setTimeout(confirmPin, 120);
   });
 
   document.getElementById('exportBtn').addEventListener('click', exportJSON);
@@ -1330,7 +1330,7 @@ function b64ToBytes(b) { return Uint8Array.from(atob(b), c => c.charCodeAt(0)); 
 async function hashPin(pin) {
   const salt = crypto.getRandomValues(new Uint8Array(16));
   const iter = 200000;
-  return { salt: btoa(String.fromCharCode(...salt)), hash: await pbkdf2B64(pin, salt, iter), iter };
+  return { salt: btoa(String.fromCharCode(...salt)), hash: await pbkdf2B64(pin, salt, iter), iter, len: pin.length };
 }
 async function checkPin(pin) {
   const p = settings.masterPin;
@@ -1759,7 +1759,7 @@ async function saveMasterPin() {
   const inp = document.getElementById('masterPinInput');
   const val = inp.value.trim();
   if (!val) { showToast('Enter a PIN first', 'error'); return; }
-  if (!/^\d{6}$/.test(val)) { showToast('PIN must be exactly 6 digits', 'error'); return; }
+  if (!/^\d{6,12}$/.test(val)) { showToast('PIN must be 6-12 digits', 'error'); return; }
   settings.masterPin = await hashPin(val);
   inp.value = '';
   chrome.storage.local.set({ settings });
@@ -1873,5 +1873,5 @@ function handleHighlightOut(e) {
 
 // ── UTILS ─────────────────────────────────────────────────────────
 function extractDomain(url) { try { return new URL(url).hostname; } catch { return url; } }
-function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-function escAttr(s) { return String(s).replace(/"/g,'&quot;'); }
+function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+const escAttr = escHtml;

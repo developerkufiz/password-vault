@@ -200,7 +200,7 @@ Cloud Sync keeps an encrypted copy of your vault in sync across the devices sign
 |---|---|
 | Auto-lock | Re-ask the Master PIN and lock cloud sync after N idle minutes (0–120; 0 = never). |
 | Lock now | Immediately locks: clears the PIN grace period, the in-memory sync key, and (if local encryption is on) the decrypted vault. |
-| Master PIN | Set a 6-digit PIN. Once saved it cannot be viewed. It gates password copy / reveal, JSON export, and disabling PIN protect. |
+| Master PIN | Set a 6-12 digit PIN (stored as a PBKDF2 hash). Once saved it cannot be viewed. It gates password copy / reveal, JSON export, and disabling PIN protect. |
 | PIN recovery | Download a one-time recovery code. If you forget the PIN, use the code to remove it **without wiping the vault**. |
 | Reset & Wipe | Removes the Master PIN **and** deletes every credential. No recovery. Export first. |
 | Encrypt local vault | Stores passwords as ciphertext on this device, unlocked by a passphrase. A backup is downloaded first. Auto-fill and the vault list only work while unlocked. |
