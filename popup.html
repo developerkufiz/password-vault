@@ -897,6 +897,27 @@
   </div>
 </div>
 
+<!-- SECRET PROMPT MODAL (passphrases / recovery code) -->
+<div class="modal-overlay" id="secretModal" style="display:none;z-index:10060">
+  <div class="modal" style="max-width:300px">
+    <div class="modal-header">
+      <div class="modal-title" id="secretTitle"></div>
+      <button class="modal-close" id="secretClose">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="field" style="margin-bottom:6px">
+        <div class="field-label" style="margin-bottom:6px"><span class="acc">//</span> <span id="secretLabel"></span></div>
+        <input type="password" id="secretInput" autocomplete="new-password" spellcheck="false"
+          style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:5px;padding:8px 11px;font-family:var(--font-mono);font-size:13px;color:var(--text1);outline:none;">
+        <input type="password" id="secretInput2" placeholder="re-enter" autocomplete="new-password" spellcheck="false"
+          style="width:100%;margin-top:6px;background:var(--bg3);border:1px solid var(--border);border-radius:5px;padding:8px 11px;font-family:var(--font-mono);font-size:13px;color:var(--text1);outline:none;">
+        <div id="secretError" style="font-size:9px;color:var(--danger);margin-top:5px;letter-spacing:1px;min-height:14px;"></div>
+      </div>
+      <button class="btn btn-primary" id="secretOk" style="margin-top:4px">OK</button>
+    </div>
+  </div>
+</div>
+
 <!-- EDIT MODAL -->
 <div class="modal-overlay" id="editModal">
   <div class="modal">

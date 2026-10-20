@@ -376,16 +376,15 @@ function handleEntryClick(e) {
   const { action, id, value, label, url } = btn.dataset;
   if (action === 'copy') {
     if (label === 'Password') {
+      // Password is looked up by id, never rendered into the DOM
       const entry = entries.find(x => x.id === id);
-      // pinProtect ON (default true) + masterPin set = require PIN
-      // pinProtect OFF = copy freely
-      const pinActive = settings.masterPin && (entry ? entry.pinProtect !== false : true);
-      if (pinActive) {
-        gatePin(() => copyField(value, label));
-        return;
-      }
+      if (!entry) return;
+      const go = () => copyField(entry.password, label);
+      // pinProtect ON (default true) + masterPin set = require PIN; OFF = copy freely
+      if (settings.masterPin && entry.pinProtect !== false) gatePin(go); else go();
+      return;
     }
-    copyField(value, label);
+    copyField(decodeURIComponent(value), label);
   }
   if (action === 'copy-totp') {
     const entry = entries.find(x => x.id === id);
@@ -1078,7 +1077,6 @@ function entryCard(e) {
   const fColor  = folder && folder.color ? folder.color : '';
   const masked  = '•'.repeat(Math.min(e.password.length, 16));
   const encUser = encodeURIComponent(e.username);
-  const encPass = encodeURIComponent(e.password);
   const encUrl  = encodeURIComponent(e.url);
   const sid     = escAttr(e.id);
   const sel     = e.selectors || {};
@@ -1140,7 +1138,7 @@ function entryCard(e) {
       <div class="entry-actions">
         <div class="entry-actions-left">
           <button class="btn btn-sm" data-action="copy" data-value="${encUser}" data-label="Username" data-highlight="user" data-selector="${escAttr(sel.username||'')}">⎘ User</button>
-          <button class="btn btn-sm" data-action="copy" data-value="${encPass}" data-label="Password" data-id="${sid}" data-highlight="pass" data-selector="${escAttr(sel.password||'')}">⎘ Pass</button>
+          <button class="btn btn-sm" data-action="copy" data-label="Password" data-id="${sid}" data-highlight="pass" data-selector="${escAttr(sel.password||'')}">⎘ Pass</button>
           ${isMatch && !locked ? `<button class="btn btn-sm" data-action="fill" data-id="${sid}">⚡ Fill</button>` : ''}
           ${isMatch && locked  ? `<button class="btn btn-sm btn-unlock-sm" data-action="unlock" data-url="${encUrl}">↺ Unlock</button>` : ''}
         </div>
@@ -1220,8 +1218,7 @@ async function doClipboardClear(value) {
   try { await navigator.clipboard.writeText(''); } catch {}
 }
 
-function copyField(enc, label) {
-  const text = decodeURIComponent(enc);
+function copyField(text, label) {
   navigator.clipboard.writeText(text).then(() => {
     showToast(`${label} copied`);
     if (label === 'Password') scheduleClipboardClear(text);
@@ -1357,7 +1354,7 @@ async function generateRecoveryCode() {
 async function resetPinWithRecovery() {
   const rec = settings.pinRecovery;
   if (!rec) { showToast('No recovery code was generated', 'error'); return; }
-  const entered = (prompt('Enter your recovery code:') || '').trim().toUpperCase();
+  const entered = ((await askSecret({ title: '🔑 RECOVERY CODE', label: 'Enter your recovery code.' })) || '').trim().toUpperCase();
   if (!entered) return;
   const hash = await pbkdf2B64(entered, b64ToBytes(rec.salt), rec.iter || 200000);
   if (hash !== rec.hash) { showToast('✕ Incorrect recovery code', 'error'); return; }
@@ -1433,19 +1430,17 @@ async function unlockLocal() {
 
 async function enableLocalEnc() {
   if (encLocalOn()) return;
-  if (entries.length) {
-    if (!confirm('Encrypt the local vault?\n\nA vault.json backup will download first. If you forget the passphrase, the local data cannot be recovered without that backup.')) return;
-    doExport();
-  } else if (!confirm('Encrypt your vault with a passphrase? (Recommended)\n\nIf you forget it, saved passwords cannot be recovered.')) return;
-  const p1 = prompt('Set a vault passphrase (min 8 characters). This is separate from your 6-digit PIN.');
+  if (!confirm(entries.length
+    ? 'Encrypt the local vault?\n\nAn encrypted vault.json backup will download first. If you forget the passphrase, your passwords cannot be recovered.'
+    : 'Encrypt your vault with a passphrase? (Recommended)\n\nIf you forget it, saved passwords cannot be recovered.')) return;
+  const p1 = await askSecret({ title: '🔐 VAULT PASSPHRASE', label: 'Min 8 characters. Separate from your PIN.', confirm: true, min: 8 });
   if (p1 == null) return;
-  if (p1.length < 8) { showToast('Passphrase must be at least 8 characters', 'error'); return; }
-  if (prompt('Re-enter the passphrase:') !== p1) { showToast('Passphrases did not match', 'error'); return; }
   const salt = _kb64e(crypto.getRandomValues(new Uint8Array(16)));
   const iter = 600000;
   _dataKey = await deriveDataKey(p1, salt, iter);
   const check = await aesEncrypt(_dataKey, { ok: 1 });
   settings.encLocal = { on: true, salt, iter, check };
+  if (entries.length) await doExport();   // backup, encrypted with the new passphrase
   await stashDataKey();
   await chromeSet({ vault_enc: await aesEncrypt(_dataKey, entries), settings });
   await chromeRemove('vault');
@@ -1513,17 +1508,33 @@ function exportJSON() {
     doExport();
   }
 }
-function doExport() {
-  const blob = new Blob([JSON.stringify({vault:entries,folders,exported:new Date().toISOString()},null,2)],{type:'application/json'});
+// Backups are always encrypted: with the vault key when local encryption is on, else a one-off passphrase.
+async function doExport() {
+  let key = _dataKey, salt, iter;
+  if (encLocalOn() && _dataKey) ({ salt, iter } = settings.encLocal);
+  else {
+    const pass = await askSecret({ title: '🔐 BACKUP PASSPHRASE', label: 'Needed to import this file. Min 8 characters.', confirm: true, min: 8 });
+    if (pass == null) return;
+    salt = _kb64e(crypto.getRandomValues(new Uint8Array(16))); iter = 600000;
+    key = await deriveDataKey(pass, salt, iter);
+  }
+  const rec = await aesEncrypt(key, { vault: entries, folders, exported: new Date().toISOString() });
+  const blob = new Blob([JSON.stringify({ pvEnc: 1, salt, iter, ...rec }, null, 2)], { type: 'application/json' });
   const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='pwd-vault-vault.json'; a.click();
-  showToast('Vault exported');
+  showToast('Vault exported (encrypted)');
 }
 function importJSON(event) {
   const file=event.target.files[0]; if(!file) return;
   const reader=new FileReader();
-  reader.onload=e=>{
+  reader.onload=async e=>{
     try {
-      const parsed = JSON.parse(e.target.result);
+      let parsed = JSON.parse(e.target.result);
+      if (parsed && parsed.pvEnc) {
+        const pass = await askSecret({ title: '🔐 BACKUP PASSPHRASE', label: 'Passphrase this backup was exported with.' });
+        if (pass == null) return;
+        try { parsed = await aesDecrypt(await deriveDataKey(pass, parsed.salt, parsed.iter), parsed); }
+        catch { showToast('✕ Wrong passphrase', 'error'); return; }
+      }
       const imp = Array.isArray(parsed) ? parsed : parsed.vault;
       if(!Array.isArray(imp)) throw new Error();
       // Merge folders first so imported entries can keep their folderId
@@ -1799,24 +1810,65 @@ function closePinModal() {
   _pinCallback = null;
 }
 
+// Wrong-PIN throttle: after 5 misses wait 30s, doubling per miss (max 1h).
+// Kept in storage so closing/reopening the popup doesn't reset it.
+let _pinBusy = false;
 async function confirmPin() {
-  const entered = document.getElementById('pinInput').value;
-  const errEl   = document.getElementById('pinError');
-  if (await checkPin(entered)) {
+  if (_pinBusy) return;
+  const inp   = document.getElementById('pinInput');
+  const errEl = document.getElementById('pinError');
+  const { pin_fails: f = { count: 0, until: 0 } } = await chromeGet(['pin_fails']);
+  const waitMsg = () => `✕ TOO MANY TRIES — WAIT ${Math.ceil((f.until - Date.now()) / 1000)}S`;
+  if (Date.now() < f.until) { errEl.textContent = waitMsg(); inp.value = ''; return; }
+  _pinBusy = true;
+  const ok = await checkPin(inp.value);
+  _pinBusy = false;
+  if (ok) {
+    chromeRemove('pin_fails');
     markUnlocked();
     const cb = _pinCallback;   // save BEFORE closing (closePinModal nulls it)
     closePinModal();
     if (cb) cb();              // now call it safely
   } else {
-    errEl.textContent = '✕ INCORRECT PIN';
-    const inp = document.getElementById('pinInput');
+    f.count++;
+    if (f.count >= 5) f.until = Date.now() + Math.min(30000 * 2 ** (f.count - 5), 3600000);
+    chromeSet({ pin_fails: f });
+    const locked = Date.now() < f.until;
+    errEl.textContent = locked ? waitMsg() : '✕ INCORRECT PIN';
     inp.classList.add('pin-error');
     inp.value = '';
     setTimeout(() => {
       inp.classList.remove('pin-error');
-      errEl.textContent = '';
+      if (!locked) errEl.textContent = '';
     }, 1000);
   }
+}
+
+// ── SECRET PROMPT — masked replacement for window.prompt ─────────
+function askSecret({ title, label, confirm = false, min = 0 }) {
+  return new Promise(resolve => {
+    const $ = id => document.getElementById(id);
+    const m = $('secretModal'), a = $('secretInput'), b = $('secretInput2'), err = $('secretError');
+    $('secretTitle').textContent = title;
+    $('secretLabel').textContent = label;
+    a.value = b.value = ''; err.textContent = '';
+    b.style.display = confirm ? '' : 'none';
+    m.style.display = 'flex';
+    setTimeout(() => a.focus(), 50);
+    const done = v => {
+      m.style.display = 'none'; a.value = b.value = '';
+      $('secretOk').onclick = $('secretClose').onclick = a.onkeydown = b.onkeydown = null;
+      resolve(v);
+    };
+    const ok = () => {
+      if (a.value.length < min) { err.textContent = `✕ MIN ${min} CHARACTERS`; return; }
+      if (confirm && a.value !== b.value) { err.textContent = '✕ DOES NOT MATCH'; return; }
+      done(a.value);
+    };
+    $('secretOk').onclick = ok;
+    $('secretClose').onclick = () => done(null);
+    a.onkeydown = b.onkeydown = e => { if (e.key === 'Enter') ok(); if (e.key === 'Escape') done(null); };
+  });
 }
 
 

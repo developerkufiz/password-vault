@@ -215,8 +215,8 @@ The Master PIN is a screen-peek deterrent stored in extension settings, not full
 |---|---|
 | Folders | Create, rename, recolour and delete folders. Deleting a folder moves its credentials to Ungrouped. |
 | Password Health | Scan for weak, reused or old passwords. Tap a result to jump to that credential. |
-| Export vault.json | Download all credentials and folders as JSON. Requires the PIN if one is set. |
-| Import vault.json | Merge credentials from a previous export. Newer entries win; duplicates are not doubled. |
+| Export vault.json | Download all credentials and folders as an encrypted JSON file (vault passphrase if local encryption is on, otherwise a backup passphrase you choose). Requires the PIN if one is set. |
+| Import vault.json | Merge credentials from a previous export (asks for the backup passphrase if encrypted). Newer entries win; duplicates are not doubled. |
 | Import CSV | Import from Chrome, Bitwarden and other managers that export CSV. |
 | Wipe Vault | Delete all credentials (with confirmation). The Master PIN is kept. |
 
