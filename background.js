@@ -192,7 +192,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         return;
       }
       // Pass resolved settings so content.js uses the right autosubmit value
-      sendResponse({ match, settings: { ...settings, autosubmit: resolvedAutosubmit }, urlKey: key, maxAttempts: max });
+      sendResponse({ match, settings: { ...settings, masterPin: undefined, pinRecovery: undefined, encLocal: undefined, autosubmit: resolvedAutosubmit }, urlKey: key, maxAttempts: max });
      });
     });
     return true;

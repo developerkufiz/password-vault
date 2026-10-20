@@ -16,6 +16,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   await loadUnlockState();
   // Migrate: drop legacy drag-order
   if (settings.cardOrder) { delete settings.cardOrder; chrome.storage.local.set({ settings }); }
+  // Migrate: plaintext Master PIN -> PBKDF2 hash
+  if (typeof settings.masterPin === 'string') { settings.masterPin = await hashPin(settings.masterPin); chrome.storage.local.set({ settings }); }
   await loadCurrentTab();
   applyTheme(settings.theme || 'dark');
   renderVault();
@@ -34,6 +36,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   updateLocalLockUI();
   refreshTotps();
   setInterval(refreshTotps, 1000);
+  if (!encLocalOn() && !settings.encOffered) {
+    saveSetting('encOffered', true);
+    setTimeout(enableLocalEnc, 300);
+  }
 
   if (window.Cloud) {
     Cloud.init({
@@ -1320,6 +1326,17 @@ async function pbkdf2B64(text, saltBytes, iter) {
 }
 function b64ToBytes(b) { return Uint8Array.from(atob(b), c => c.charCodeAt(0)); }
 
+// Master PIN is stored as { salt, hash, iter }, never in plain text.
+async function hashPin(pin) {
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const iter = 200000;
+  return { salt: btoa(String.fromCharCode(...salt)), hash: await pbkdf2B64(pin, salt, iter), iter };
+}
+async function checkPin(pin) {
+  const p = settings.masterPin;
+  return !!p && (await pbkdf2B64(pin, b64ToBytes(p.salt), p.iter)) === p.hash;
+}
+
 async function generateRecoveryCode() {
   if (!settings.masterPin) { showToast('Set a Master PIN first', 'error'); return; }
   const raw = crypto.getRandomValues(new Uint8Array(10));
@@ -1416,8 +1433,10 @@ async function unlockLocal() {
 
 async function enableLocalEnc() {
   if (encLocalOn()) return;
-  if (!confirm('Encrypt the local vault?\n\nA vault.json backup will download first. If you forget the passphrase, the local data cannot be recovered without that backup.')) return;
-  doExport();
+  if (entries.length) {
+    if (!confirm('Encrypt the local vault?\n\nA vault.json backup will download first. If you forget the passphrase, the local data cannot be recovered without that backup.')) return;
+    doExport();
+  } else if (!confirm('Encrypt your vault with a passphrase? (Recommended)\n\nIf you forget it, saved passwords cannot be recovered.')) return;
   const p1 = prompt('Set a vault passphrase (min 8 characters). This is separate from your 6-digit PIN.');
   if (p1 == null) return;
   if (p1.length < 8) { showToast('Passphrase must be at least 8 characters', 'error'); return; }
@@ -1736,12 +1755,13 @@ function updatePinEyeIcon() {
   eye.title = isProtected ? 'Reveal password (PIN required)' : 'Reveal password';
 }
 
-function saveMasterPin() {
+async function saveMasterPin() {
   const inp = document.getElementById('masterPinInput');
   const val = inp.value.trim();
   if (!val) { showToast('Enter a PIN first', 'error'); return; }
   if (!/^\d{6}$/.test(val)) { showToast('PIN must be exactly 6 digits', 'error'); return; }
-  settings.masterPin = val;
+  settings.masterPin = await hashPin(val);
+  inp.value = '';
   chrome.storage.local.set({ settings });
   applySettings();
   showToast('✓ Master PIN saved');
@@ -1779,10 +1799,10 @@ function closePinModal() {
   _pinCallback = null;
 }
 
-function confirmPin() {
+async function confirmPin() {
   const entered = document.getElementById('pinInput').value;
   const errEl   = document.getElementById('pinError');
-  if (entered === settings.masterPin) {
+  if (await checkPin(entered)) {
     markUnlocked();
     const cb = _pinCallback;   // save BEFORE closing (closePinModal nulls it)
     closePinModal();
