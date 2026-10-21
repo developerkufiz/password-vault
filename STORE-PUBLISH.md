@@ -49,7 +49,10 @@ Password Vault is a developer-focused password manager for Chrome.
   device — protected by a separate sync passphrase; only encrypted data
   ever leaves your browser
 • Import from Chrome, Bitwarden, and other CSV exports
-• Optional local encryption of the on-device vault
+• Local encryption of the on-device vault, offered on first run
+• Password health scan, plus an on-demand breach check (Have I Been Pwned,
+  k-anonymity: only a 5-character hash prefix is sent)
+• Encrypted vault.json backups
 
 Your data stays on your device unless you enable sync.
 ```
@@ -66,6 +69,9 @@ Your data stays on your device unless you enable sync.
 - **Data usage:** with sync enabled, only an end-to-end encrypted vault blob is
   stored in `chrome.storage.sync`. No server, no plaintext, no selling, no
   unrelated use.
+- **Breach check (on demand):** sends only the first 5 hex characters of each
+  password's SHA-1 hash to `api.pwnedpasswords.com`. No passwords, usernames
+  or URLs are sent.
 - Add a **Privacy policy URL** (hosted at
   developerkufiz.github.io/password-vault/privacy-policy.html).
 
