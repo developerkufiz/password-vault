@@ -818,6 +818,10 @@
     <div class="setting-info"><div class="setting-name">Encrypt local vault</div><div class="setting-desc">Store passwords as ciphertext on this device, unlocked by a passphrase. Downloads a backup first. Auto-fill works only while unlocked.</div></div>
     <label class="toggle"><input type="checkbox" id="toggleEncLocal"><span class="slider"></span></label>
   </div>
+  <div class="setting-row" id="encPassRow" style="display:none">
+    <div class="setting-info"><div class="setting-name">Vault passphrase</div><div class="setting-desc">Re-encrypt the local vault with a new passphrase. Old exports still need the old one.</div></div>
+    <button class="btn btn-sm" id="changeEncPassBtn" style="font-size:9px;padding:5px 9px;flex-shrink:0">Change</button>
+  </div>
 
   <div class="section-title" style="margin-top:12px">Lockout Status</div>
   <div id="lockoutList" class="lockout-list"><div class="lockout-empty">No lockouts active</div></div>
@@ -909,6 +913,8 @@
         <div class="field-label" style="margin-bottom:6px"><span class="acc">//</span> <span id="secretLabel"></span></div>
         <input type="password" id="secretInput" autocomplete="new-password" spellcheck="false"
           style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:5px;padding:8px 11px;font-family:var(--font-mono);font-size:13px;color:var(--text1);outline:none;">
+        <div class="strength-bar" style="display:none"><div class="strength-fill" id="secretStrengthFill"></div></div>
+        <div class="strength-text" id="secretStrengthText" style="display:none">—</div>
         <input type="password" id="secretInput2" placeholder="re-enter" autocomplete="new-password" spellcheck="false"
           style="width:100%;margin-top:6px;background:var(--bg3);border:1px solid var(--border);border-radius:5px;padding:8px 11px;font-family:var(--font-mono);font-size:13px;color:var(--text1);outline:none;">
         <div id="secretError" style="font-size:9px;color:var(--danger);margin-top:5px;letter-spacing:1px;min-height:14px;"></div>

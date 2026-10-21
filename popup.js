@@ -205,6 +205,7 @@ function bindEvents() {
   const llBtn = document.getElementById('localLockBtn');
   const llInp = document.getElementById('localLockInput');
   if (llBtn) llBtn.addEventListener('click', unlockLocal);
+  document.getElementById('changeEncPassBtn')?.addEventListener('click', changeLocalPass);
   if (llInp) llInp.addEventListener('keydown', e => { if (e.key === 'Enter') unlockLocal(); });
   document.querySelectorAll('[data-href]').forEach(a =>
     a.addEventListener('click', () => chrome.tabs.create({ url: a.dataset.href })));
@@ -1452,6 +1453,26 @@ async function enableLocalEnc() {
   showToast('✓ Local vault encrypted');
 }
 
+async function changeLocalPass() {
+  if (!encLocalOn() || !_dataKey) { showToast('Unlock the vault first', 'error'); return; }
+  const cfg = settings.encLocal;
+  const cur = await askSecret({ title: '🔐 CURRENT PASSPHRASE', label: 'Enter your current vault passphrase.' });
+  if (cur == null) return;
+  try { await aesDecrypt(await deriveDataKey(cur, cfg.salt, cfg.iter), cfg.check); }
+  catch { showToast('✕ Incorrect passphrase', 'error'); return; }
+  const next = await askSecret({ title: '🔐 NEW PASSPHRASE', label: 'Min 8 characters.', confirm: true, min: 8 });
+  if (next == null) return;
+  // Build everything first, then swap key + settings + vault in one write so a closed popup can't leave them mismatched
+  const salt = _kb64e(crypto.getRandomValues(new Uint8Array(16)));
+  const key  = await deriveDataKey(next, salt, cfg.iter);
+  const enc  = { on: true, salt, iter: cfg.iter, check: await aesEncrypt(key, { ok: 1 }) };
+  const vault_enc = await aesEncrypt(key, entries);
+  _dataKey = key; settings.encLocal = enc;
+  await chromeSet({ vault_enc, settings });
+  await stashDataKey();
+  showToast('✓ Passphrase changed');
+}
+
 async function disableLocalEnc() {
   if (!encLocalOn()) return;
   if (!_dataKey) { showToast('Unlock the vault first', 'error'); return; }
@@ -1485,6 +1506,8 @@ function applySettings() {
   if (recRow) recRow.style.display = hasPIN ? 'flex' : 'none';
   const encToggle = document.getElementById('toggleEncLocal');
   if (encToggle) encToggle.checked = encLocalOn();
+  const encPassRow = document.getElementById('encPassRow');
+  if (encPassRow) encPassRow.style.display = encLocalOn() ? 'flex' : 'none';
   if (!hasPIN) {
     const inp = document.getElementById('masterPinInput');
     if (inp) { inp.value = ''; inp.type = 'password'; }
@@ -1855,11 +1878,15 @@ function askSecret({ title, label, confirm = false, min = 0 }) {
     $('secretLabel').textContent = label;
     a.value = b.value = ''; err.textContent = '';
     b.style.display = confirm ? '' : 'none';
+    // strength meter only when choosing a new secret
+    const strength = () => checkStrength(confirm ? a.value : '', 'secretStrengthFill', 'secretStrengthText');
+    a.oninput = strength; strength();
     m.style.display = 'flex';
     setTimeout(() => a.focus(), 50);
     const done = v => {
       m.style.display = 'none'; a.value = b.value = '';
-      $('secretOk').onclick = $('secretClose').onclick = a.onkeydown = b.onkeydown = null;
+      $('secretOk').onclick = $('secretClose').onclick = a.onkeydown = b.onkeydown = a.oninput = null;
+      checkStrength('', 'secretStrengthFill', 'secretStrengthText');
       resolve(v);
     };
     const ok = () => {
