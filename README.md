@@ -1,5 +1,11 @@
 # 🔐 Password Vault — Chrome Extension
 
+[![Users](https://img.shields.io/chrome-web-store/users/jbpdjacnlniokgklokljimkcjkoohjnc?label=users)](https://chromewebstore.google.com/detail/jbpdjacnlniokgklokljimkcjkoohjnc)
+[![Version](https://img.shields.io/chrome-web-store/v/jbpdjacnlniokgklokljimkcjkoohjnc?label=chrome%20web%20store)](https://chromewebstore.google.com/detail/jbpdjacnlniokgklokljimkcjkoohjnc)
+[![Rating](https://img.shields.io/chrome-web-store/rating/jbpdjacnlniokgklokljimkcjkoohjnc)](https://chromewebstore.google.com/detail/jbpdjacnlniokgklokljimkcjkoohjnc/reviews)
+
+**[➕ Add to Chrome](https://chromewebstore.google.com/detail/jbpdjacnlniokgklokljimkcjkoohjnc)**
+
 A lightweight, keyboard-driven password manager for Chrome, built for developers.
 Dark terminal aesthetic. No account, no server.
 
