@@ -8,5 +8,5 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: node --check popup.js && node --check background.js && node --check content.js && node --check cloud.js
+      - run: node --check popup.js && node --check background.js && node --check content.js && node --check cloud.js && node --check pwgen.js
       - run: node test.js

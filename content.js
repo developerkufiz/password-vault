@@ -182,6 +182,20 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     setTimeout(() => { _autoFilling = false; }, 1000);
     sendResponse({ success: ok });
   }
+  if (msg.action === 'fillGenerated') {
+    // The right-clicked field has focus. On a password field also fill the next
+    // empty password field after it (the "confirm password" box), never one before.
+    const el = document.activeElement;
+    if (el && el.tagName === 'INPUT') {
+      fillField(el, msg.password);
+      if (el.type === 'password') {
+        const next = [...document.querySelectorAll('input[type=password]')]
+          .find(p => p !== el && !p.value && (el.compareDocumentPosition(p) & Node.DOCUMENT_POSITION_FOLLOWING));
+        if (next) fillField(next, msg.password);
+      }
+      showPageToast('generated');
+    }
+  }
   if (msg.action === 'getCaptured')  { sendResponse({ captured: _snapshot }); }
   if (msg.action === 'clearCaptured') {
     _snapshot = null;
@@ -502,6 +516,7 @@ function showPageToast(mode, count, max) {
     manual:{ t:'⚡ PWD VAULT — FILLED',                    c:'#00ffe7', b:'rgba(0,255,231,.4)' },
     fail:  { t:'✕ PWD VAULT — FILL FAILED',               c:'#ff4060', b:'rgba(255,64,96,.4)' },
     locked:{ t:`🔒 PWD VAULT — LOCKED (${count}/${max})`, c:'#ff4060', b:'rgba(255,64,96,.4)' },
+    generated:{ t:'🔑 PWD VAULT — PASSWORD GENERATED · SAVED WHEN YOU SUBMIT', c:'#00ffe7', b:'rgba(0,255,231,.4)' },
   };
   const m = M[mode] || M.manual;
   const d = document.createElement('div');

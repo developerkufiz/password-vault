@@ -1,5 +1,6 @@
 // ── background.js — PWD VAULT by KuFiz ──────────────────────────
 'use strict';
+importScripts('pwgen.js');   // generatePassword()
 
 // Fresh installs have no `settings` key in storage until the user opens
 // Config — without these defaults, settings.autofill reads as undefined
@@ -10,6 +11,7 @@ function withDefaults(settings) { return { ...DEFAULT_SETTINGS, ...(settings || 
 // ── AUTO-FILL ON TAB LOAD ─────────────────────────────────────────
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (changeInfo.status !== 'complete' || !tab.url) return;
+  updateBadge(tabId, tab.url);
   if (tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://')) return;
 
   chrome.storage.local.get(['settings','attempts'], result => {
@@ -33,20 +35,7 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
     if (!eligible.length) return;
 
     if (eligible.length === 1) {
-      const e = eligible[0];
-      const resolvedAutosubmit = (e.autosubmit !== null && e.autosubmit !== undefined) ? e.autosubmit : settings.autosubmit;
-      setTimeout(() => {
-        chrome.tabs.sendMessage(tabId, {
-          action:      'autofill',
-          username:    e.username,
-          password:    e.password,
-          selectors:   e.selectors   || {},
-          extraFields: e.extraFields || [],
-          autosubmit:  resolvedAutosubmit,
-          urlKey:      key,
-          maxAttempts: max
-        }).catch(() => {});
-      }, 900);
+      setTimeout(() => sendAutofill(tabId, eligible[0], settings, key, max), 900);
       return;
     }
 
@@ -75,12 +64,9 @@ function sendAccountPicker(tabId, accounts, key, tries = 0) {
     });
 }
 
-// Fill the account chosen in the content-script picker (password stays in background)
-function fillChosenAccount(entry, tabId, tabUrl, settings, attempts) {
-  const max = settings.maxAttempts || 5;
-  const key = urlKey(tabUrl || entry.url);
-  const rec = attempts[key] || { count: 0 };
-  if (rec.count >= max) return;
+// Send one credential to the page. Also counts fills — the popup asks for a
+// rating after 20 (a sent fill, not a confirmed login: good enough for that).
+function sendAutofill(tabId, entry, settings, key, max) {
   const resolvedAutosubmit = (entry.autosubmit !== null && entry.autosubmit !== undefined) ? entry.autosubmit : settings.autosubmit;
   chrome.tabs.sendMessage(tabId, {
     action:      'autofill',
@@ -92,7 +78,51 @@ function fillChosenAccount(entry, tabId, tabUrl, settings, attempts) {
     urlKey:      key,
     maxAttempts: max
   }).catch(() => {});
+  chrome.storage.local.get('fill_count', r => chrome.storage.local.set({ fill_count: (r.fill_count || 0) + 1 }));
 }
+
+// Fill the account chosen in the content-script picker (password stays in background)
+function fillChosenAccount(entry, tabId, tabUrl, settings, attempts) {
+  const max = settings.maxAttempts || 5;
+  const key = urlKey(tabUrl || entry.url);
+  const rec = attempts[key] || { count: 0 };
+  if (rec.count >= max) return;
+  sendAutofill(tabId, entry, settings, key, max);
+}
+
+// ── TOOLBAR BADGE — saved logins for the page, else NEW after an update ──
+function updateBadge(tabId, url) {
+  chrome.storage.local.get('whats_new_from', r => {
+    readVault(entries => {
+      const n = (entries && url) ? entries.filter(e => urlMatches(e.url, url)).length : 0;
+      chrome.action.setBadgeText({ tabId, text: n ? String(n) : (r.whats_new_from ? 'NEW' : '') });
+      chrome.action.setBadgeBackgroundColor({ tabId, color: '#00b4ff' });
+    });
+  });
+}
+function updateActiveBadge() {
+  chrome.tabs.query({ active: true, lastFocusedWindow: true }, tabs => { if (tabs[0]) updateBadge(tabs[0].id, tabs[0].url); });
+}
+chrome.tabs.onActivated.addListener(updateActiveBadge);
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'local' && (changes.vault || changes.vault_enc || changes.whats_new_from)) updateActiveBadge();
+  if (area === 'session' && changes.pv_datakey) updateActiveBadge();   // vault unlocked / locked
+});
+
+// ── RIGHT-CLICK MENU ──────────────────────────────────────────────
+chrome.runtime.onInstalled.addListener(() => {
+  chrome.contextMenus.removeAll(() => {
+    chrome.contextMenus.create({ id: 'pv-fill', title: 'Fill saved login', contexts: ['page', 'editable'] });
+    chrome.contextMenus.create({ id: 'pv-generate', title: 'Generate strong password here', contexts: ['editable'] });
+  });
+});
+chrome.contextMenus.onClicked.addListener((info, tab) => {
+  if (!tab || !tab.url) return;
+  if (info.menuItemId === 'pv-fill') fillTab(tab);
+  if (info.menuItemId === 'pv-generate') {
+    chrome.tabs.sendMessage(tab.id, { action: 'fillGenerated', password: generatePassword(20) }).catch(() => {});
+  }
+});
 
 // ── WHAT'S NEW — after an update, badge the icon until the popup shows the changelog ──
 function showNewBadge() {
@@ -134,8 +164,11 @@ chrome.alarms.onAlarm.addListener(a => {
 // Default: Ctrl+Shift+L (Cmd+Shift+L on Mac). Rebind at chrome://extensions/shortcuts
 chrome.commands.onCommand.addListener(command => {
   if (command !== 'fill-login') return;
-  chrome.tabs.query({ active: true, currentWindow: true }, tabs => {
-    const tab = tabs[0];
+  chrome.tabs.query({ active: true, currentWindow: true }, tabs => fillTab(tabs[0]));
+});
+
+// Fill the saved login for a tab on demand (shortcut + right-click menu)
+function fillTab(tab) {
     if (!tab || !tab.url || tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://')) return;
 
     chrome.storage.local.get(['settings','attempts'], result => {
@@ -169,8 +202,7 @@ chrome.commands.onCommand.addListener(command => {
       sendAccountPicker(tab.id, accounts, key);
      });
     });
-  });
-});
+}
 
 // ── MESSAGE HANDLERS ──────────────────────────────────────────────
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {

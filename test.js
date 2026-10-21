@@ -38,22 +38,27 @@ eval(['_tenc', '_tdec', '_kb64e', '_kb64d'].map(line).concat(
   assert.strictEqual(sentUrl, 'https://api.pwnedpasswords.com/range/5BAA6');
   assert.strictEqual(await pwnedCount('not-in-list-xyz'), 0);
 
-  // Background auto-lock: PIN idle must NOT drop the vault key (auto-fill needs it); vault timer does
+  // ── background.js in a sandbox; chrome.* APIs not given become no-ops ──
+  const vm = require('vm'), fs = require('fs');
+  const noop = new Proxy(function () {}, { get: () => noop, apply: () => {} });
+  const orNoop = o => new Proxy(o, { get: (t, k) => (k in t ? t[k] : noop) });
+  const loadBackground = chrome => {
+    const box = { chrome: orNoop({ ...chrome, storage: orNoop(chrome.storage || {}) }), console, URL, atob, btoa, crypto, TextEncoder, TextDecoder, setTimeout, clearTimeout };
+    box.importScripts = (...files) => files.forEach(f => vm.runInContext(fs.readFileSync(__dirname + '/' + f, 'utf8'), box));
+    vm.createContext(box);
+    vm.runInContext(fs.readFileSync(__dirname + '/background.js', 'utf8'), box);
+    return box;
+  };
+  const tick = () => new Promise(r => setImmediate(r));
+
+  // Auto-lock: PIN idle must NOT drop the vault key (auto-fill needs it); vault timer does
   const runAlarm = async (session, settings) => {
-    let onAlarm;
-    const removed = [];
-    const noop = new Proxy(function () {}, { get: () => noop, apply: () => {} });
-    const stub = {
-      ...Object.fromEntries(['tabs', 'commands', 'runtime'].map(k => [k, noop])),
+    let onAlarm; const removed = [];
+    loadBackground({
       alarms: { create() {}, onAlarm: { addListener: f => { onAlarm = f; } } },
-      storage: {
-        session: { get: (k, cb) => cb(session), remove: k => removed.push(...k) },
-        local: { get: (k, cb) => cb({ settings }) },
-      },
-    };
-    require('vm').runInNewContext(require('fs').readFileSync(__dirname + '/background.js', 'utf8'), { chrome: stub, console, URL, atob, btoa, crypto, TextDecoder, setTimeout });
-    onAlarm({ name: 'pv-autolock' });
-    await new Promise(r => setImmediate(r));
+      storage: { session: { get: (k, cb) => cb(session), remove: k => removed.push(...k) }, local: { get: (k, cb) => cb({ settings }) } },
+    });
+    onAlarm({ name: 'pv-autolock' }); await tick();
     return removed;
   };
   const old = Date.now() - 10 * 60000;
@@ -66,15 +71,13 @@ eval(['_tenc', '_tdec', '_kb64e', '_kb64d'].map(line).concat(
 
   // What's new: an update flags the old version + badges; reloading the same version doesn't
   const runInstalled = details => {
-    let onInstalled; const set = []; let badge = '';
-    const noop = new Proxy(function () {}, { get: () => noop, apply: () => {} });
-    const stub = {
-      tabs: noop, commands: noop, alarms: noop, storage: { local: { set: o => set.push(o) }, session: noop },
+    const listeners = [], set = []; let badge = '';
+    loadBackground({
+      storage: { local: { set: o => set.push(o) } },
       action: { setBadgeText: o => { badge = o.text; }, setBadgeBackgroundColor() {} },
-      runtime: { onInstalled: { addListener: f => { onInstalled = f; } }, onStartup: noop, onMessage: noop, getManifest: () => ({ version: '3.20.0' }) },
-    };
-    require('vm').runInNewContext(require('fs').readFileSync(__dirname + '/background.js', 'utf8'), { chrome: stub, console, URL, atob, btoa, crypto, TextDecoder, setTimeout });
-    onInstalled(details);
+      runtime: orNoop({ onInstalled: { addListener: f => listeners.push(f) }, getManifest: () => ({ version: '3.20.0' }) }),
+    });
+    listeners.forEach(f => f(details));
     return { set: JSON.stringify(set), badge };  // JSON: objects come from the vm realm
   };
   let ins = runInstalled({ reason: 'update', previousVersion: '3.19.1' });
@@ -83,6 +86,26 @@ eval(['_tenc', '_tdec', '_kb64e', '_kb64d'].map(line).concat(
   assert.strictEqual(ins.set, '[]'); assert.strictEqual(ins.badge, '');
   ins = runInstalled({ reason: 'install' });
   assert.strictEqual(ins.set, '[]');
+
+  // Toolbar badge: count of saved logins for the page, else NEW while unseen, else blank
+  const badges = [];
+  const runBadge = async (store, url) => {
+    loadBackground({
+      action: { setBadgeText: o => badges.push(o.text), setBadgeBackgroundColor() {} },
+      storage: { local: { get: (k, cb) => cb(store) } },
+    }).updateBadge(1, url);
+    await tick();
+  };
+  const vault = [{ url: 'https://a.test/login' }, { url: 'https://a.test/' }, { url: 'https://b.test/' }];
+  await runBadge({ vault, whats_new_from: '3.20.1' }, 'https://a.test/login');
+  await runBadge({ vault, whats_new_from: '3.20.1' }, 'https://c.test/');
+  await runBadge({ vault }, 'https://c.test/');
+  assert.deepStrictEqual(badges, ['2', 'NEW', '']);
+
+  // Generator (shared pwgen.js): length + every character class
+  const { generatePassword } = loadBackground({});
+  const pw = generatePassword(20);
+  assert(pw.length === 20 && /[a-z]/.test(pw) && /[A-Z]/.test(pw) && /[0-9]/.test(pw) && /[^A-Za-z0-9]/.test(pw), pw);
 
   // What's new: numeric (not string) version compare
   assert(versionGt('3.19.1', '3.19.0') && versionGt('3.20.0', '3.9.9') && versionGt('3.16.0', '3.15'));

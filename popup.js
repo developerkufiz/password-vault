@@ -36,6 +36,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   bindEvents();
   checkPendingCapture();
   chromeGet(['whats_new_from']).then(r => { if (r.whats_new_from) showWhatsNew(r.whats_new_from); });
+  // Ask for a rating once, after the extension has proved useful (20 auto-fills)
+  chromeGet(['fill_count']).then(r => {
+    if ((r.fill_count || 0) >= 20 && !settings.rateDone) document.getElementById('rateBanner').style.display = 'flex';
+  });
   updateLocalLockUI();
   refreshTotps();
   setInterval(refreshTotps, 1000);
@@ -155,6 +159,12 @@ function bindEvents() {
   });
   document.getElementById('lockNowBtn').addEventListener('click', () => lockNow({ vault: true }));
   document.getElementById('whatsNewBtn').addEventListener('click', () => showWhatsNew('0'));
+  const rateDone = () => { saveSetting('rateDone', true); document.getElementById('rateBanner').style.display = 'none'; };
+  document.getElementById('rateBtn').addEventListener('click', () => {
+    chrome.tabs.create({ url: `https://chromewebstore.google.com/detail/${chrome.runtime.id}/reviews` });
+    rateDone();
+  });
+  document.getElementById('rateDismiss').addEventListener('click', rateDone);
   document.getElementById('whatsNewOk').addEventListener('click', dismissWhatsNew);
   document.getElementById('whatsNewClose').addEventListener('click', dismissWhatsNew);
   document.getElementById('healthScanBtn').addEventListener('click', () => gatePin(() => renderHealthReport()));
@@ -1268,21 +1278,6 @@ function getStrengthLevel(pw) {
   return Math.min(4,s);
 }
 
-function generatePassword(len = 20) {
-  const lower = 'abcdefghijkmnpqrstuvwxyz';
-  const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
-  const digit = '23456789';
-  const sym   = '!@#$%^&*-_=+?';
-  const all   = lower + upper + digit + sym;
-  const pick  = set => set[crypto.getRandomValues(new Uint32Array(1))[0] % set.length];
-  const out   = [pick(lower), pick(upper), pick(digit), pick(sym)];
-  while (out.length < len) out.push(pick(all));
-  for (let i = out.length - 1; i > 0; i--) {                 // Fisher–Yates shuffle
-    const j = crypto.getRandomValues(new Uint32Array(1))[0] % (i + 1);
-    [out[i], out[j]] = [out[j], out[i]];
-  }
-  return out.join('');
-}
 
 function togglePw(inputId, btn) {
   const inp = document.getElementById(inputId);
@@ -1922,6 +1917,7 @@ async function confirmPin() {
 // Newest first. Add an entry with every release; after an update the popup
 // shows the entries newer than the version the user updated from.
 const CHANGELOG = [
+  ['3.21.0', ['Toolbar icon shows how many logins are saved for the page', 'Right-click a page: Fill saved login, or Generate strong password in a field']],
   ['3.20.1', ['Cloud Sync keeps synced passwords encrypted on devices that use vault encryption']],
   ['3.20.0', ["What's new: see what changed after each update (also in Config › About)"]],
   ['3.19.1', ['Auto-fill keeps working after the PIN auto-locks', 'New Vault lock timer in Config › Security']],

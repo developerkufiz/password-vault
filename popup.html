@@ -439,6 +439,8 @@
   .about-btn--ig{color:#fff;background:linear-gradient(45deg,#f09433,#dc2743,#bc1888);}
   .about-btn--li{color:#fff;background:#0a66c2;}
   .about-btn--coffee{color:#0b1220;background:#ffdd57;}
+  .rate-banner{display:flex;align-items:center;gap:8px;margin:0 0 8px;padding:8px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg2);font-size:10px;color:var(--text1);}
+  .rate-banner span{flex:1;}
   .wn-ver{font-family:var(--font-mono);font-size:10px;font-weight:600;color:var(--accent);letter-spacing:1px;margin-top:8px;}
   .wn-ver:first-child{margin-top:0;}
   .wn-list{margin:4px 0 0;padding-left:16px;font-size:11px;color:var(--text1);line-height:1.5;}
@@ -621,6 +623,12 @@
       <button class="btn btn-success" id="captureSaveBtn" style="flex:1">✓ Save</button>
       <button class="btn btn-ghost" id="captureDismissBtn" style="flex:1">✕ Dismiss</button>
     </div>
+  </div>
+
+  <div class="rate-banner" id="rateBanner" style="display:none">
+    <span>Enjoying Password Vault? A rating helps others find it.</span>
+    <button class="btn btn-sm" id="rateBtn">★ Rate</button>
+    <button class="btn-icon" id="rateDismiss" title="Don't show again">✕</button>
   </div>
 
   <div class="vault-toolbar">
@@ -1070,6 +1078,7 @@
 <!-- TOAST -->
 <div class="toast" id="toast"></div>
 
+<script src="pwgen.js"></script>
 <script src="cloud.js"></script>
 <script src="popup.js"></script>
 </body>

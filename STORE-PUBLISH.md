@@ -64,6 +64,7 @@ Your data stays on your device unless you enable sync.
   - `storage` — save the vault locally
   - `tabs` — read the current tab URL to match the right saved credential
   - `alarms` — periodic auto-lock / sync check
+  - `contextMenus` — right-click "Fill saved login" / "Generate strong password here"
   - `host_permissions <all_urls>` — the content script auto-fills the login
     form on any site the user has saved a login for
 - **Data usage:** with sync enabled, only an end-to-end encrypted vault blob is
