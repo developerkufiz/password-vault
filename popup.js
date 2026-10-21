@@ -1275,7 +1275,8 @@ function onPasswordHistoryClick(ev) {
 }
 
 // ── IGNORED SITES — never auto-fill or offer to save here ────────
-function siteHost(url) { try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return ''; } }
+// Web pages only — chrome://extensions etc. must not become an "ignored site"
+function siteHost(url) { try { const u = new URL(url); return /^https?:$/.test(u.protocol) ? u.hostname.replace(/^www\./, '') : ''; } catch { return ''; } }
 function isIgnoredSite(url) {
   const h = siteHost(url);
   return !!h && (settings.neverSites || []).some(s => h === s || h.endsWith('.' + s));
@@ -2023,6 +2024,7 @@ async function confirmPin() {
 // Newest first. Add an entry with every release. The pop-up always shows the
 // whole history; after an update, versions newer than the old one are tagged NEW.
 const CHANGELOG = [
+  ['3.23.1', ['Fix: "Ignore this site" is only offered on web pages (not on browser pages like chrome://extensions)']],
   ['3.23.0', ['Password history: the last 5 passwords of each login are kept — copy or restore them in Edit', 'Ignored sites: choose sites where the vault never auto-fills or offers to save (Config › General, or "Never here" on the save prompt)', "What's new now shows the full version history"]],
   ['3.22.0', ['Stops auto-filling a saved password that keeps failing (e.g. expired) and tells you on the page', 'Logging in with a new password offers to update the saved login instead of adding a duplicate']],
   ['3.21.0', ['Toolbar icon shows how many logins are saved for the page', 'Right-click a page: Fill saved login, or Generate strong password in a field', 'One-time rating prompt']],
