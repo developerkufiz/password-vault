@@ -66,6 +66,15 @@
   </div>
 
   <div class="card">
+    <h2><span class="dot"></span>Breach check (optional, on demand)</h2>
+    <p>Only when you press <b>Check breaches</b>, the extension computes the
+    SHA-1 hash of each saved password on your device and sends the
+    <b>first 5 characters</b> of that hash to the Have I Been Pwned range API
+    (<code>api.pwnedpasswords.com</code>). Your passwords, full hashes,
+    usernames and URLs are never sent. The comparison happens on your device.</p>
+  </div>
+
+  <div class="card">
     <h2><span class="dot"></span>Page access</h2>
     <p>The extension reads the address of the tab you are on only to find the
     matching credential and fill its login form. Your browsing history is not
@@ -76,7 +85,8 @@
     <h2><span class="dot"></span>What we do not do</h2>
     <p>We do not collect, receive, sell or transfer your data to anyone, use it
     for advertising, or use it to assess creditworthiness. The extension has no
-    analytics and no backend of any kind.</p>
+    analytics and no backend of any kind. The only outside request it makes is
+    the optional breach check described above.</p>
   </div>
 
   <div class="card">

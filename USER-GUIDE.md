@@ -1,6 +1,6 @@
 # Password Vault — User Guide
 
-**Version 3.18 · Built by Tengku Mohamad Syafiz**
+**Version 3.19 · Built by Tengku Mohamad Syafiz**
 
 ---
 
@@ -11,7 +11,7 @@ Password Vault is a lightweight, keyboard-driven password manager for Chrome, bu
 | | |
 |---|---|
 | Extension name | Password Vault |
-| Version | 3.18 |
+| Version | 3.19 |
 | Platform | Google Chrome (Manifest V3) |
 | Storage | Your browser only — `chrome.storage.local`. Optional sync uses `chrome.storage.sync` (encrypted). |
 | Accounts / servers | None. There is no sign-up and no backend service. |
@@ -272,6 +272,7 @@ When you copy a password or a 2FA code, Password Vault clears it from the clipbo
 
 | Version | Changes |
 |---|---|
+| 3.19 | Breach check against Have I Been Pwned (k-anonymity, on demand). |
 | 3.18 | Change vault passphrase; passphrase strength meter; tests run on every push. |
 | 3.17 | Masked passphrase prompts, wrong-PIN throttle, encrypted `vault.json` export. |
 | 3.16 | Master PIN stored hashed and 6-12 digits; encryption offered on first open; auto-lock also clears the vault key. |

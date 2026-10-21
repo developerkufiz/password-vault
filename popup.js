@@ -149,7 +149,8 @@ function bindEvents() {
     e.target.value = v; saveSetting('autoLockMin', v);
   });
   document.getElementById('lockNowBtn').addEventListener('click', () => lockNow());
-  document.getElementById('healthScanBtn').addEventListener('click', () => gatePin(renderHealthReport));
+  document.getElementById('healthScanBtn').addEventListener('click', () => gatePin(() => renderHealthReport()));
+  document.getElementById('breachScanBtn').addEventListener('click', () => gatePin(checkBreaches));
   document.getElementById('healthReport').addEventListener('click', e => {
     const row = e.target.closest('.health-row');
     if (row) { document.querySelector('.tab[data-tab="vault"]').click(); openEditModal(row.dataset.id); }
@@ -1588,7 +1589,27 @@ function importJSON(event) {
   reader.readAsText(file); event.target.value='';
 }
 // ── PASSWORD HEALTH ──────────────────────────────────────────────
-function renderHealthReport() {
+// Have I Been Pwned k-anonymity range API: only the first 5 hex chars of each SHA-1 leave the device.
+async function pwnedCount(pw) {
+  const hex = [...new Uint8Array(await crypto.subtle.digest('SHA-1', new TextEncoder().encode(pw)))]
+    .map(b => b.toString(16).padStart(2, '0')).join('').toUpperCase();
+  const res = await fetch('https://api.pwnedpasswords.com/range/' + hex.slice(0, 5), { headers: { 'Add-Padding': 'true' } });
+  if (!res.ok) throw new Error('HIBP ' + res.status);
+  const line = (await res.text()).split('\n').find(l => l.startsWith(hex.slice(5) + ':'));
+  return line ? parseInt(line.split(':')[1], 10) : 0;   // padding rows have count 0
+}
+async function checkBreaches() {
+  const box = document.getElementById('healthReport');
+  if (!entries.length) { renderHealthReport(); return; }
+  box.innerHTML = '<div class="lockout-empty">Checking with Have I Been Pwned…</div>';
+  const unique = [...new Set(entries.map(e => e.password).filter(Boolean))];
+  let hits;
+  try { hits = new Map((await Promise.all(unique.map(async pw => [pw, await pwnedCount(pw)]))).filter(([, n]) => n > 0)); }
+  catch { showToast('Breach check failed — offline?', 'error'); renderHealthReport(); return; }
+  renderHealthReport(hits);
+  showToast(hits.size ? `⚠ ${hits.size} breached password(s)` : '✓ No breached passwords', hits.size ? 'error' : undefined);
+}
+function renderHealthReport(breached) {
   const box = document.getElementById('healthReport');
   if (!entries.length) { box.innerHTML = '<div class="lockout-empty">Vault is empty</div>'; return; }
   const now = Date.now();
@@ -1600,6 +1621,7 @@ function renderHealthReport() {
     const pw = e.password || '';
     if (pw.length < 8 || getStrengthLevel(pw) < 2) issues.push('weak');
     if (pw && counts.get(pw) > 1) issues.push('reused');
+    if (breached && breached.has(pw)) issues.push('breached');
     const ref = e.updated || e.created;
     if (ref && (now - new Date(ref).getTime()) > 365 * 864e5) issues.push('old');
     if (issues.length) rows.push({ e, issues });

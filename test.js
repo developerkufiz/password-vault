@@ -8,7 +8,7 @@ const line = n => src.match(new RegExp('^const ' + n + ' .*$', 'm'))[0].replace(
 
 let settings = {};
 eval(['_tenc', '_tdec', '_kb64e', '_kb64d'].map(line).concat(
-  ['pbkdf2B64', 'b64ToBytes', 'hashPin', 'checkPin', 'deriveDataKey', 'aesEncrypt', 'aesDecrypt', 'escHtml'].map(grab)
+  ['pbkdf2B64', 'b64ToBytes', 'hashPin', 'checkPin', 'deriveDataKey', 'aesEncrypt', 'aesDecrypt', 'escHtml', 'pwnedCount'].map(grab)
 ).join('\n'));
 
 (async () => {
@@ -30,5 +30,13 @@ eval(['_tenc', '_tdec', '_kb64e', '_kb64d'].map(line).concat(
   await assert.rejects(aesDecrypt(await deriveDataKey('wrong', salt, 1000), rec));
 
   assert.strictEqual(escHtml(`<a href="x" onclick='y'>&`), '&lt;a href=&quot;x&quot; onclick=&#39;y&#39;&gt;&amp;');
+  // HIBP: only a 5-char prefix is sent; suffix match gives the count, padding (count 0) doesn't
+  let sentUrl = '';
+  global.fetch = async url => { sentUrl = url; return { ok: true, text: async () =>
+    '0018A45C4D1DEF81644B54AB7F969B88D65:0\r\n1E4C9B93F3F0682250B6CF8331B7EE68FD8:9545824\r\n' }; };
+  assert.strictEqual(await pwnedCount('password'), 9545824);   // SHA-1 = 5BAA61E4C9B93F3F0682250B6CF8331B7EE68FD8
+  assert.strictEqual(sentUrl, 'https://api.pwnedpasswords.com/range/5BAA6');
+  assert.strictEqual(await pwnedCount('not-in-list-xyz'), 0);
+
   console.log('ok');
 })().catch(e => { console.error(e); process.exit(1); });
