@@ -39,28 +39,38 @@ Produces `password-vault-store.zip` (extension files only — no server, no docs
 **Description:**
 
 ```
-Password Vault is a developer-focused password manager for Chrome.
+Password Vault is a fast, keyboard-driven password manager built for developers.
 
-• Save credentials and auto-fill them by matching the page URL
-• Organize entries into folders and search instantly
-• Master PIN lock with lockout protection
-• TOTP (2FA) code generation per entry
-• Optional end-to-end encrypted sync to restore your vault on another
-  device — protected by a separate sync passphrase; only encrypted data
-  ever leaves your browser
-• Import from Chrome, Bitwarden, and other CSV exports
-• Local encryption of the on-device vault, offered on first run
-• Password health scan, plus an on-demand breach check (Have I Been Pwned,
-  k-anonymity: only a 5-character hash prefix is sent)
-• Encrypted vault.json backups
-• Stops auto-filling a saved password that keeps failing (e.g. expired)
-  and offers to update it when you log in with the new one
-• Password history: the last 5 passwords of each login, restorable
-• Right-click: fill a login or generate a strong password into a field
-• Toolbar badge shows how many logins are saved for the current site
-• Ignore sites where you never want auto-fill or save prompts
+WHAT IT DOES
+• Save any login (site, URL, username, password, notes) and find it instantly by name or URL.
+• Auto-fills the matching credential on the right page — or press Ctrl+Shift+L to fill without opening the popup.
+• Right-click any page to fill a login, or right-click a field to generate a strong password into it.
+• The toolbar icon shows how many logins you have saved for the site you're on.
+• Detects successful logins and offers to save new credentials automatically.
+• Changed a password? Log in with the new one and it offers to update the saved login.
+• Stops auto-filling a saved password that keeps failing (for example an expired one) and tells you on the page.
+• Password history keeps the last 5 passwords of each login, so you can restore an old one.
+• Built-in password generator, a strength / reuse health report, and an on-demand breach check.
+• TOTP (2FA) codes stored alongside the login and copied with one click.
+• Organise entries into your own colour-coded folders.
+• Ignore sites where you never want auto-fill or save prompts.
+• Keyboard navigation in the vault list (arrow keys, Enter to fill).
+• CSV import from Chrome, Bitwarden and other managers; encrypted JSON export for backups.
 
-Your data stays on your device unless you enable sync.
+SECURITY
+• Everything is stored locally in your browser by default.
+• Local vault encryption, offered on first run — passwords are kept as ciphertext on disk and unlocked with a passphrase.
+• Optional master PIN (stored hashed) with idle auto-lock and lockout after failed attempts.
+• Breach check uses Have I Been Pwned's k-anonymity API: only the first 5 characters of a password's hash are sent, never the password.
+• Clipboard is cleared automatically after copying a password.
+
+SYNC (optional)
+• Turn on end-to-end encrypted sync and your vault is mirrored across the devices signed in to your Chrome profile.
+• The encryption key is derived from a passphrase that never leaves your device.
+• No account to create, no server, no subscription.
+
+WHY INSTALL IT
+If you live in the browser and want a lightweight, private password manager that fills logins by URL, works from the keyboard, and never forces you into a cloud account — Password Vault stays out of your way.
 ```
 
 ## 5. Privacy & permissions (required)
