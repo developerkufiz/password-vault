@@ -8,7 +8,7 @@ const line = n => src.match(new RegExp('^const ' + n + ' .*$', 'm'))[0].replace(
 
 let settings = {};
 eval(['_tenc', '_tdec', '_kb64e', '_kb64d'].map(line).concat(
-  ['pbkdf2B64', 'b64ToBytes', 'hashPin', 'checkPin', 'deriveDataKey', 'aesEncrypt', 'aesDecrypt', 'escHtml', 'pwnedCount', 'versionGt'].map(grab)
+  ['pbkdf2B64', 'b64ToBytes', 'hashPin', 'checkPin', 'deriveDataKey', 'aesEncrypt', 'aesDecrypt', 'escHtml', 'pwnedCount', 'versionGt', 'rememberOldPassword'].map(grab)
 ).join('\n'));
 
 (async () => {
@@ -132,6 +132,21 @@ eval(['_tenc', '_tdec', '_kb64e', '_kb64d'].map(line).concat(
   g = guard();
   g.send({ action: 'loginSubmitted', urlKey: K }); g.send({ action: 'reportAttempt', urlKey: K, noForm: true });
   assert.strictEqual(g.wrong(), undefined);                              // same URL, no form = logged in
+
+  // Ignored sites: host or subdomain, "www." ignored; others not
+  const { isIgnoredSite } = loadBackground({});
+  const ign = { neverSites: ['bank.test'] };
+  assert(isIgnoredSite(ign, 'https://bank.test/login') && isIgnoredSite(ign, 'https://www.bank.test/') && isIgnoredSite(ign, 'https://secure.bank.test/x'));
+  assert(!isIgnoredSite(ign, 'https://notbank.test/') && !isIgnoredSite({}, 'https://bank.test/'));
+
+  // Password history: newest first, capped at 5, empty password not kept
+  const ent = { password: 'p0' };
+  for (let i = 1; i <= 7; i++) { rememberOldPassword(ent); ent.password = 'p' + i; }
+  assert.deepStrictEqual(ent.passwordHistory.map(h => h.password), ['p6', 'p5', 'p4', 'p3', 'p2']);
+  const blank = { password: '' }; rememberOldPassword(blank); assert(!blank.passwordHistory);
+  const back = { password: 'B', passwordHistory: [{ password: 'A' }, { password: 'B' }] };
+  rememberOldPassword(back, 'A');   // restoring an old one: it leaves the history, no duplicates
+  assert.deepStrictEqual(back.passwordHistory.map(h => h.password), ['B']);
 
   // Generator (shared pwgen.js): length + every character class
   const { generatePassword } = loadBackground({});

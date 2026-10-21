@@ -28,6 +28,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   refreshFolderSelects();
   applySettings();
   renderLockoutList();
+  renderIgnoredSites();
   setupTabs();
   setupSearch();
   setupKeyboardNav();
@@ -158,7 +159,7 @@ function bindEvents() {
     e.target.value = v; saveSetting('vaultLockMin', v);
   });
   document.getElementById('lockNowBtn').addEventListener('click', () => lockNow({ vault: true }));
-  document.getElementById('whatsNewBtn').addEventListener('click', () => showWhatsNew('0'));
+  document.getElementById('whatsNewBtn').addEventListener('click', () => showWhatsNew(null));
   const rateDone = () => { saveSetting('rateDone', true); document.getElementById('rateBanner').style.display = 'none'; };
   document.getElementById('rateBtn').addEventListener('click', () => {
     chrome.tabs.create({ url: `https://chromewebstore.google.com/detail/${chrome.runtime.id}/reviews` });
@@ -267,6 +268,18 @@ function bindEvents() {
   // Capture banner
   document.getElementById('captureSaveBtn').addEventListener('click', saveCapture);
   document.getElementById('captureDismissBtn').addEventListener('click', dismissCapture);
+  document.getElementById('captureNeverBtn').addEventListener('click', () => {
+    if (pendingCapture) addIgnoredSite(pendingCapture.url);
+    dismissCapture();
+  });
+  document.getElementById('editPwHistoryList').addEventListener('click', onPasswordHistoryClick);
+  document.getElementById('ignoreThisSiteBtn').addEventListener('click', () => currentTab && addIgnoredSite(currentTab.url));
+  document.getElementById('ignoredList').addEventListener('click', e => {
+    const b = e.target.closest('[data-unignore]');
+    if (!b) return;
+    saveSetting('neverSites', (settings.neverSites || []).filter(s => s !== b.dataset.unignore));
+    renderIgnoredSites();
+  });
 
   // Edit modal
   document.getElementById('modalCloseBtn').addEventListener('click', closeEditModal);
@@ -664,6 +677,7 @@ function checkPendingCapture() {
 
 function showCaptureBanner(captured) {
   if (!settings.capture) return;
+  if (isIgnoredSite(captured.url)) { chrome.storage.local.remove('__pwdm_pending'); return; }
   const same = entries.find(e => urlMatches(e.url, captured.url) && e.username === captured.username);
   if (same && same.password === captured.password) { chrome.storage.local.remove('__pwdm_pending'); return; }
 
@@ -747,6 +761,7 @@ function saveCapture() {
   const c = pendingCapture;
   const target = c.updateId && entries.find(e => e.id === c.updateId);
   if (target) {
+    rememberOldPassword(target, c.password);
     Object.assign(target, { password: c.password, strength: getStrengthLevel(c.password), updated: new Date().toISOString() });
     clearAttemptsFor(target.url, c.url);
     persist(); renderVault(); renderStats();
@@ -877,6 +892,7 @@ function openEditModal(id) {
   }
   checkStrength(e.password || '', 'editStrengthFill', 'editStrengthText');
   renderExtraFieldRows('editExtraList', e.extraFields || []);
+  renderPasswordHistory(e);
   // Load per-entry autofill/autosubmit overrides
   loadBehaviourToggles(e);
   document.getElementById('editModal').classList.add('open');
@@ -891,7 +907,10 @@ function saveEdit() {
   const idx = entries.findIndex(e => e.id === id);
   if (idx < 0) return;
   const pass  = document.getElementById('editPassword').value;
-  if (pass !== entries[idx].password) clearAttemptsFor(entries[idx].url, document.getElementById('editUrl').value.trim());
+  if (pass !== entries[idx].password) {
+    clearAttemptsFor(entries[idx].url, document.getElementById('editUrl').value.trim());
+    rememberOldPassword(entries[idx], pass);
+  }
   const extra = collectExtraFields('editExtraList');
   const afIndividual = document.getElementById('editAutofillModeBtn')?.classList.contains('individual');
   const asIndividual = document.getElementById('editAutosubmitModeBtn')?.classList.contains('individual');
@@ -1219,6 +1238,69 @@ function triggerAutofill(id) {
 function urlKey(url) { try { const u=new URL(url); return u.origin+u.pathname; } catch { return url; } }
 function isLocked(url)        { const r=attempts[urlKey(url)]; return r ? (r.count || 0) >= settings.maxAttempts || (r.wrongPw || 0) >= 2 : false; }
 function getAttemptCount(url) { return attempts[urlKey(url)]?.count || 0; }
+// ── PASSWORD HISTORY — last 5 passwords per login (synced/encrypted with the entry) ──
+// next = the password replacing it; it and any repeats are dropped from the history
+function rememberOldPassword(e, next) {
+  if (!e.password) return;
+  const seen = new Set([next]);
+  e.passwordHistory = [{ password: e.password, changed: new Date().toISOString() }, ...(e.passwordHistory || [])]
+    .filter(h => !seen.has(h.password) && seen.add(h.password)).slice(0, 5);
+}
+// Rows show dates only; the old password is looked up by index on click, never put in the DOM
+function renderPasswordHistory(e) {
+  const box = document.getElementById('editPwHistory');
+  const hist = e.passwordHistory || [];
+  box.style.display = hist.length ? '' : 'none';
+  document.getElementById('editPwHistoryList').innerHTML = hist.map((h, i) => `
+    <div class="lockout-row">
+      <div class="lockout-info"><div class="lockout-domain">${'•'.repeat(Math.min(h.password.length, 12))}</div>
+        <div class="lockout-meta">Replaced ${escHtml(new Date(h.changed).toLocaleDateString())}</div></div>
+      <button class="btn-unlock" data-hist="copy" data-i="${i}">Copy</button>
+      <button class="btn-unlock" data-hist="restore" data-i="${i}">Restore</button>
+    </div>`).join('');
+}
+function onPasswordHistoryClick(ev) {
+  const btn = ev.target.closest('[data-hist]');
+  if (!btn) return;
+  const e = entries.find(x => x.id === document.getElementById('editId').value);
+  const h = e && (e.passwordHistory || [])[Number(btn.dataset.i)];
+  if (!h) return;
+  gatePin(() => {
+    if (btn.dataset.hist === 'copy') { copyField(h.password, 'Password'); return; }
+    const ep = document.getElementById('editPassword');
+    ep.value = h.password;
+    checkStrength(h.password, 'editStrengthFill', 'editStrengthText');
+    showToast('Old password restored — Save to keep it');
+  });
+}
+
+// ── IGNORED SITES — never auto-fill or offer to save here ────────
+function siteHost(url) { try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return ''; } }
+function isIgnoredSite(url) {
+  const h = siteHost(url);
+  return !!h && (settings.neverSites || []).some(s => h === s || h.endsWith('.' + s));
+}
+function addIgnoredSite(url) {
+  const h = siteHost(url);
+  if (!h || (settings.neverSites || []).includes(h)) return;
+  saveSetting('neverSites', [...(settings.neverSites || []), h].sort());
+  renderIgnoredSites();
+  showToast(`Ignoring ${h}`);
+}
+function renderIgnoredSites() {
+  const list = document.getElementById('ignoredList');
+  const sites = settings.neverSites || [];
+  list.innerHTML = sites.length ? sites.map(s => `
+    <div class="lockout-row">
+      <div class="lockout-info"><div class="lockout-domain">${escHtml(s)}</div><div class="lockout-meta">No auto-fill, no save prompt</div></div>
+      <button class="btn-unlock" data-unignore="${escAttr(s)}">Remove</button>
+    </div>`).join('') : '<div class="lockout-empty">No ignored sites</div>';
+  const addBtn = document.getElementById('ignoreThisSiteBtn');
+  const host = currentTab && siteHost(currentTab.url);
+  addBtn.style.display = host && !isIgnoredSite(currentTab.url) ? '' : 'none';
+  addBtn.textContent = `+ Ignore ${host}`;
+}
+
 // New password saved for a login: drop its lockout / wrong-password pause
 function clearAttemptsFor(...urls) {
   urls.filter(Boolean).forEach(u => delete attempts[urlKey(u)]);
@@ -1938,18 +2020,30 @@ async function confirmPin() {
 }
 
 // ── WHAT'S NEW ───────────────────────────────────────────────────
-// Newest first. Add an entry with every release; after an update the popup
-// shows the entries newer than the version the user updated from.
+// Newest first. Add an entry with every release. The pop-up always shows the
+// whole history; after an update, versions newer than the old one are tagged NEW.
 const CHANGELOG = [
+  ['3.23.0', ['Password history: the last 5 passwords of each login are kept — copy or restore them in Edit', 'Ignored sites: choose sites where the vault never auto-fills or offers to save (Config › General, or "Never here" on the save prompt)', "What's new now shows the full version history"]],
   ['3.22.0', ['Stops auto-filling a saved password that keeps failing (e.g. expired) and tells you on the page', 'Logging in with a new password offers to update the saved login instead of adding a duplicate']],
-  ['3.21.0', ['Toolbar icon shows how many logins are saved for the page', 'Right-click a page: Fill saved login, or Generate strong password in a field']],
+  ['3.21.0', ['Toolbar icon shows how many logins are saved for the page', 'Right-click a page: Fill saved login, or Generate strong password in a field', 'One-time rating prompt']],
   ['3.20.1', ['Cloud Sync keeps synced passwords encrypted on devices that use vault encryption']],
-  ['3.20.0', ["What's new: see what changed after each update (also in Config › About)"]],
+  ['3.20.0', ["What's new pop-up after each update, with a NEW badge on the icon"]],
   ['3.19.1', ['Auto-fill keeps working after the PIN auto-locks', 'New Vault lock timer in Config › Security']],
   ['3.19.0', ['Check breaches: find passwords leaked online (Have I Been Pwned)']],
   ['3.18.0', ['Change your vault passphrase', 'Passphrase strength meter']],
   ['3.17.0', ['Lockout after repeated wrong PINs', 'vault.json backups are now encrypted', 'Passphrases are hidden while typing']],
   ['3.16.0', ['Master PIN is stored hashed and can be 6–12 digits', 'Vault encryption is offered on first open']],
+  ['3.15.2', ['Fix: auto-fill now works on a fresh install before Config is opened']],
+  ['3.15.1', ['Removed unused permissions']],
+  ['3.15.0', ['Cloud Sync rewritten: end-to-end encrypted through your Chrome account — no server, no sign-up', 'Clipboard auto-clear, faster search and list, keyboard navigation in the vault', 'Auto-lock when the popup closes']],
+  ['3.13.0', ['Config split into General / Security / Data tabs']],
+  ['3.12.0', ['About section; folder picker in the Add form; strength meter appears as you type']],
+  ['3.11.0', ['Add form split into Main / Options tabs']],
+  ['3.10.0', ['Optional local vault encryption with a passphrase']],
+  ['3.9.0',  ['2FA (TOTP) codes on each login', 'One-time Master PIN recovery code']],
+  ['3.8.0',  ['Auto-lock after idle time', 'Password health report (weak / reused / old)', 'CSV import from Chrome, Bitwarden and others']],
+  ['3.7.0',  ['Password generator', 'Ctrl+Shift+L fills the login for the current page']],
+  ['3.4.0',  ['Cloud sync, folders, auto-capture of new logins']],
 ];
 function versionGt(a, b) {
   const x = a.split('.').map(Number), y = b.split('.').map(Number);
@@ -1958,12 +2052,12 @@ function versionGt(a, b) {
   }
   return false;
 }
-function showWhatsNew(from) {
-  const items = CHANGELOG.filter(([v]) => versionGt(v, from));
-  if (!items.length) { dismissWhatsNew(); return; }
-  document.getElementById('whatsNewList').innerHTML = items.map(([v, notes]) =>
-    `<div class="wn-ver">v${escHtml(v)}</div><ul class="wn-list">${notes.map(n => `<li>${escHtml(n)}</li>`).join('')}</ul>`).join('');
+function showWhatsNew(from) {   // from = version updated from, or null (opened from About)
+  document.getElementById('whatsNewList').innerHTML = CHANGELOG.map(([v, notes]) =>
+    `<div class="wn-ver">v${escHtml(v)}${from && versionGt(v, from) ? ' <span class="wn-new">NEW</span>' : ''}</div>` +
+    `<ul class="wn-list">${notes.map(n => `<li>${escHtml(n)}</li>`).join('')}</ul>`).join('');
   document.getElementById('whatsNewModal').style.display = 'flex';
+  document.getElementById('whatsNewList').scrollTop = 0;
 }
 function dismissWhatsNew() {
   document.getElementById('whatsNewModal').style.display = 'none';

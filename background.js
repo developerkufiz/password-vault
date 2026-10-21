@@ -22,6 +22,7 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
     const settings = withDefaults(result.settings);
     const attempts = result.attempts || {};
     const max      = settings.maxAttempts || 5;
+    if (isIgnoredSite(settings, tab.url)) return;   // user chose "never here" (manual fill still works)
 
     const key = urlKey(tab.url);
     const rec = attempts[key] || { count: 0 };
@@ -383,6 +384,13 @@ function resolveLogin(tabId, success) {
       chrome.storage.local.set({ attempts });
     });
   });
+}
+
+// Same rule as the popup: listed host or any subdomain of it ("www." ignored)
+function isIgnoredSite(settings, url) {
+  let h = '';
+  try { h = new URL(url).hostname.replace(/^www\./, ''); } catch {}
+  return !!h && (settings.neverSites || []).some(s => h === s || h.endsWith('.' + s));
 }
 
 function urlKey(url) {

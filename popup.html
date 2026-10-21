@@ -443,6 +443,7 @@
   .rate-banner span{flex:1;}
   .wn-ver{font-family:var(--font-mono);font-size:10px;font-weight:600;color:var(--accent);letter-spacing:1px;margin-top:8px;}
   .wn-ver:first-child{margin-top:0;}
+  .wn-new{font-size:8px;padding:1px 5px;border-radius:3px;background:var(--accent);color:var(--bg1);margin-left:4px;letter-spacing:.5px;}
   .wn-list{margin:4px 0 0;padding-left:16px;font-size:11px;color:var(--text1);line-height:1.5;}
 
   .action-group{display:flex;flex-direction:column;gap:6px;margin-top:12px;}
@@ -622,6 +623,7 @@
     <div class="capture-actions">
       <button class="btn btn-success" id="captureSaveBtn" style="flex:1">✓ Save</button>
       <button class="btn btn-ghost" id="captureDismissBtn" style="flex:1">✕ Dismiss</button>
+      <button class="btn btn-ghost" id="captureNeverBtn" style="flex:1" title="Never auto-fill or offer to save on this site">🚫 Never here</button>
     </div>
   </div>
 
@@ -768,6 +770,9 @@
     <div class="setting-info"><div class="setting-name">Auto-submit form</div><div class="setting-desc">When ON: clicks submit button after fill. When OFF: fills only, never submits.</div></div>
     <label class="toggle"><input type="checkbox" id="toggleAutosubmit"><span class="slider"></span></label>
   </div>
+  <div class="section-title" style="margin-top:10px">Ignored sites</div>
+  <div id="ignoredList" class="lockout-list"></div>
+  <button class="btn-add-field" id="ignoreThisSiteBtn" style="margin:4px 0 10px">+ Ignore this site</button>
   <div class="setting-row">
     <div class="setting-info"><div class="setting-name">Show fill notification</div><div class="setting-desc">Toast alert when credentials are injected</div></div>
     <label class="toggle"><input type="checkbox" id="toggleNotify" checked><span class="slider"></span></label>
@@ -984,6 +989,8 @@
         <div class="strength-bar" style="display:none"><div class="strength-fill" id="editStrengthFill"></div></div>
         <div class="strength-text" id="editStrengthText" style="display:none">—</div>
       </div>
+      <div class="field" id="editPwHistory" style="display:none"><div class="field-label"><span class="acc">//</span> Previous passwords</div>
+        <div class="lockout-list" id="editPwHistoryList"></div></div>
       <div class="field"><div class="field-label"><span class="acc">//</span> Notes</div><input type="text" id="editNotes" placeholder="Notes..."></div>
       <div class="field"><div class="field-label"><span class="acc">//</span> 2FA / TOTP secret</div><input type="text" id="editTotp" placeholder="base32 secret" autocomplete="off" spellcheck="false"></div>
       <div class="field"><div class="field-label"><span class="acc">//</span> Folder</div><select class="fld-select" id="editFolder"></select></div>
