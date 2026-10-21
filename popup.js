@@ -432,7 +432,7 @@ async function loadData() {
   if (encLocalOn()) {
     await loadStashedDataKey();
     if (_dataKey && r.vault_enc) {
-      try { entries = await aesDecrypt(_dataKey, r.vault_enc); }
+      try { entries = await aesDecrypt(_dataKey, r.vault_enc); await absorbPlainVault(); }
       catch { _dataKey = null; entries = []; }
     } else {
       entries = [];                 // locked — unlockLocal() fills entries
@@ -1434,12 +1434,25 @@ async function unlockLocal() {
     await stashDataKey();
     const r = await chromeGet(['vault_enc']);
     entries = r.vault_enc ? await aesDecrypt(_dataKey, r.vault_enc) : [];
+    await absorbPlainVault();
     inp.value = '';
     markUnlocked();
     updateLocalLockUI();
     renderVault(); renderStats(); renderFolderManager(); refreshFolderSelects(); renderLockoutList();
     showToast('Vault unlocked');
   } catch { errEl.textContent = '✕ Incorrect passphrase'; }
+}
+
+// Before 3.20.1, Cloud Sync could leave a plaintext `vault` beside vault_enc.
+// Fold it into the unlocked entries (newer `updated` wins), re-encrypt, then delete it.
+async function absorbPlainVault() {
+  const { vault } = await chromeGet(['vault']);
+  if (!encLocalOn() || !_dataKey || !Array.isArray(vault)) return;
+  const map = new Map(entries.map(e => [e.id, e]));
+  vault.forEach(e => { const cur = e && map.get(e.id); if (e && (!cur || (e.updated || '') > (cur.updated || ''))) map.set(e.id, e); });
+  entries = [...map.values()];
+  await chromeSet({ vault_enc: await aesEncrypt(_dataKey, entries) });
+  await chromeRemove('vault');
 }
 
 async function enableLocalEnc() {
