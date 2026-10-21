@@ -1302,12 +1302,17 @@ function renderIgnoredSites() {
   addBtn.textContent = `+ Ignore ${host}`;
 }
 
-// New password saved for a login: drop its lockout / wrong-password pause
-function clearAttemptsFor(...urls) {
-  urls.filter(Boolean).forEach(u => delete attempts[urlKey(u)]);
-  chrome.storage.local.set({ attempts }); renderLockoutList();
+// Edit lockouts against storage, not the copy loaded when the popup opened —
+// the background may have recorded failures since, and writing the old copy back undoes them.
+async function editAttempts(fn) {
+  attempts = (await chromeGet(['attempts'])).attempts || {};
+  fn(attempts);
+  await chromeSet({ attempts });
+  renderLockoutList();
 }
-function unlockEntry(key)     { delete attempts[key]; chrome.storage.local.set({ attempts }); renderLockoutList(); renderVault(); showToast('Lockout cleared'); }
+// New password saved for a login: drop its lockout / wrong-password pause
+function clearAttemptsFor(...urls) { return editAttempts(a => urls.filter(Boolean).forEach(u => delete a[urlKey(u)])); }
+function unlockEntry(key) { return editAttempts(a => { delete a[key]; }).then(() => { renderVault(); showToast('Lockout cleared'); }); }
 
 function renderLockoutList() {
   const list   = document.getElementById('lockoutList');
@@ -2024,6 +2029,7 @@ async function confirmPin() {
 // Newest first. Add an entry with every release. The pop-up always shows the
 // whole history; after an update, versions newer than the old one are tagged NEW.
 const CHANGELOG = [
+  ['3.23.2', ['Fix: clearing one lockout in the popup could also undo a wrong-password pause recorded while the popup was open']],
   ['3.23.1', ['Fix: "Ignore this site" is only offered on web pages (not on browser pages like chrome://extensions)']],
   ['3.23.0', ['Password history: the last 5 passwords of each login are kept — copy or restore them in Edit', 'Ignored sites: choose sites where the vault never auto-fills or offers to save (Config › General, or "Never here" on the save prompt)', "What's new now shows the full version history"]],
   ['3.22.0', ['Stops auto-filling a saved password that keeps failing (e.g. expired) and tells you on the page', 'Logging in with a new password offers to update the saved login instead of adding a duplicate']],

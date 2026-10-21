@@ -272,6 +272,7 @@ When you copy a password or a 2FA code, Password Vault clears it from the clipbo
 
 | Version | Changes |
 |---|---|
+| 3.23.2 | Fix: popup lockout changes no longer overwrite newer pauses recorded by the background. |
 | 3.23.1 | Fix: "Ignore this site" only offered on web pages. |
 | 3.23 | Password history (last 5 per login, copy/restore in Edit); ignored sites (no auto-fill or save prompt); What's new shows the full history. |
 | 3.22 | Wrong-password guard: two failed logins with a filled password pause auto-fill for that page (on-page notice; Reset in Config › Security). Logging in with a changed password offers "Update" instead of a duplicate. |

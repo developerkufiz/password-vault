@@ -148,6 +148,24 @@ eval(['_tenc', '_tdec', '_kb64e', '_kb64d'].map(line).concat(
   rememberOldPassword(back, 'A');   // restoring an old one: it leaves the history, no duplicates
   assert.deepStrictEqual(back.passwordHistory.map(h => h.password), ['B']);
 
+  // Popup lockout edits must not write back its stale copy from when it opened:
+  // a pause the background recorded since then has to survive clearing another page
+  {
+    const store = { attempts: { 'https://paused.test/login': { count: 0, wrongPw: 2 }, 'https://other.test/login': { count: 3 } } };
+    const ctx = { attempts: {}, store,   // popup opened before the background recorded anything
+      chromeGet: async k => ({ attempts: JSON.parse(JSON.stringify(store.attempts)) }),
+      chromeSet: async o => { Object.assign(store, JSON.parse(JSON.stringify(o))); },
+      chrome: { storage: { local: { set: o => Object.assign(store, JSON.parse(JSON.stringify(o))) } } },
+      renderLockoutList() {}, renderVault() {}, showToast() {}, Promise };
+    vm.createContext(ctx);
+    const fns = ['urlKey', 'clearAttemptsFor', 'unlockEntry'].concat(src.includes('function editAttempts') ? ['editAttempts'] : []);
+    vm.runInContext(fns.map(grab).join('\n'), ctx);
+    await ctx.clearAttemptsFor('https://other.test/login'); await tick();
+    assert.deepStrictEqual(Object.keys(store.attempts), ['https://paused.test/login'], 'stale popup copy wiped a pause: ' + JSON.stringify(store.attempts));
+    await ctx.unlockEntry('https://paused.test/login'); await tick();
+    assert.deepStrictEqual(Object.keys(store.attempts), []);
+  }
+
   // Generator (shared pwgen.js): length + every character class
   const { generatePassword } = loadBackground({});
   const pw = generatePassword(20);
