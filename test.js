@@ -8,7 +8,7 @@ const line = n => src.match(new RegExp('^const ' + n + ' .*$', 'm'))[0].replace(
 
 let settings = {};
 eval(['_tenc', '_tdec', '_kb64e', '_kb64d'].map(line).concat(
-  ['pbkdf2B64', 'b64ToBytes', 'hashPin', 'checkPin', 'deriveDataKey', 'aesEncrypt', 'aesDecrypt', 'escHtml', 'pwnedCount'].map(grab)
+  ['pbkdf2B64', 'b64ToBytes', 'hashPin', 'checkPin', 'deriveDataKey', 'aesEncrypt', 'aesDecrypt', 'escHtml', 'pwnedCount', 'versionGt'].map(grab)
 ).join('\n'));
 
 (async () => {
@@ -63,6 +63,30 @@ eval(['_tenc', '_tdec', '_kb64e', '_kb64d'].map(line).concat(
   assert(r.includes('pv_datakey'), 'vault timer did not lock');
   r = await runAlarm({ pv_vault_at: Date.now() }, { autoLockMin: 5, vaultLockMin: 5 });
   assert(!r.includes('pv_datakey'), 'vault locked too early');
+
+  // What's new: an update flags the old version + badges; reloading the same version doesn't
+  const runInstalled = details => {
+    let onInstalled; const set = []; let badge = '';
+    const noop = new Proxy(function () {}, { get: () => noop, apply: () => {} });
+    const stub = {
+      tabs: noop, commands: noop, alarms: noop, storage: { local: { set: o => set.push(o) }, session: noop },
+      action: { setBadgeText: o => { badge = o.text; }, setBadgeBackgroundColor() {} },
+      runtime: { onInstalled: { addListener: f => { onInstalled = f; } }, onStartup: noop, onMessage: noop, getManifest: () => ({ version: '3.20.0' }) },
+    };
+    require('vm').runInNewContext(require('fs').readFileSync(__dirname + '/background.js', 'utf8'), { chrome: stub, console, URL, atob, btoa, crypto, TextDecoder, setTimeout });
+    onInstalled(details);
+    return { set: JSON.stringify(set), badge };  // JSON: objects come from the vm realm
+  };
+  let ins = runInstalled({ reason: 'update', previousVersion: '3.19.1' });
+  assert.strictEqual(ins.set, '[{"whats_new_from":"3.19.1"}]'); assert.strictEqual(ins.badge, 'NEW');
+  ins = runInstalled({ reason: 'update', previousVersion: '3.20.0' });
+  assert.strictEqual(ins.set, '[]'); assert.strictEqual(ins.badge, '');
+  ins = runInstalled({ reason: 'install' });
+  assert.strictEqual(ins.set, '[]');
+
+  // What's new: numeric (not string) version compare
+  assert(versionGt('3.19.1', '3.19.0') && versionGt('3.20.0', '3.9.9') && versionGt('3.16.0', '3.15'));
+  assert(!versionGt('3.19.0', '3.19.0') && !versionGt('3.9.0', '3.10.0'));
 
   console.log('ok');
 })().catch(e => { console.error(e); process.exit(1); });

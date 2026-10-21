@@ -439,6 +439,9 @@
   .about-btn--ig{color:#fff;background:linear-gradient(45deg,#f09433,#dc2743,#bc1888);}
   .about-btn--li{color:#fff;background:#0a66c2;}
   .about-btn--coffee{color:#0b1220;background:#ffdd57;}
+  .wn-ver{font-family:var(--font-mono);font-size:10px;font-weight:600;color:var(--accent);letter-spacing:1px;margin-top:8px;}
+  .wn-ver:first-child{margin-top:0;}
+  .wn-list{margin:4px 0 0;padding-left:16px;font-size:11px;color:var(--text1);line-height:1.5;}
 
   .action-group{display:flex;flex-direction:column;gap:6px;margin-top:12px;}
 
@@ -868,6 +871,7 @@
   <div class="section-title">About</div>
   <div class="about-box">
     <div class="about-by">Password Vault <b>v<span class="app-version"></span></b></div>
+    <button class="btn btn-sm" id="whatsNewBtn" style="margin:6px 0 4px">✨ What's new</button>
     <div class="about-by">Built by <b>Tengku Mohamad Syafiz</b></div>
     <div class="about-by" style="margin-top:6px">Feel free to follow:</div>
     <div class="about-links">
@@ -906,6 +910,20 @@
         <div id="pinError" style="font-size:9px;color:var(--danger);margin-top:5px;letter-spacing:1px;min-height:14px;"></div>
       </div>
       <button class="btn btn-primary" id="pinConfirmBtn" style="margin-top:4px">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<!-- WHAT'S NEW MODAL (shown once after an update) -->
+<div class="modal-overlay" id="whatsNewModal" style="display:none;z-index:10055">
+  <div class="modal" style="max-width:300px">
+    <div class="modal-header">
+      <div class="modal-title">✨ WHAT'S NEW · v<span class="app-version"></span></div>
+      <button class="modal-close" id="whatsNewClose">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="whatsNewList" style="max-height:260px;overflow-y:auto"></div>
+      <button class="btn btn-primary" id="whatsNewOk" style="margin-top:12px">Got it</button>
     </div>
   </div>
 </div>

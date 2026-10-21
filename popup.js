@@ -35,6 +35,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   prefillUrl();
   bindEvents();
   checkPendingCapture();
+  chromeGet(['whats_new_from']).then(r => { if (r.whats_new_from) showWhatsNew(r.whats_new_from); });
   updateLocalLockUI();
   refreshTotps();
   setInterval(refreshTotps, 1000);
@@ -153,6 +154,9 @@ function bindEvents() {
     e.target.value = v; saveSetting('vaultLockMin', v);
   });
   document.getElementById('lockNowBtn').addEventListener('click', () => lockNow({ vault: true }));
+  document.getElementById('whatsNewBtn').addEventListener('click', () => showWhatsNew('0'));
+  document.getElementById('whatsNewOk').addEventListener('click', dismissWhatsNew);
+  document.getElementById('whatsNewClose').addEventListener('click', dismissWhatsNew);
   document.getElementById('healthScanBtn').addEventListener('click', () => gatePin(() => renderHealthReport()));
   document.getElementById('breachScanBtn').addEventListener('click', () => gatePin(checkBreaches));
   document.getElementById('healthReport').addEventListener('click', e => {
@@ -1897,6 +1901,37 @@ async function confirmPin() {
       if (!locked) errEl.textContent = '';
     }, 1000);
   }
+}
+
+// ── WHAT'S NEW ───────────────────────────────────────────────────
+// Newest first. Add an entry with every release; after an update the popup
+// shows the entries newer than the version the user updated from.
+const CHANGELOG = [
+  ['3.20.0', ["What's new: see what changed after each update (also in Config › About)"]],
+  ['3.19.1', ['Auto-fill keeps working after the PIN auto-locks', 'New Vault lock timer in Config › Security']],
+  ['3.19.0', ['Check breaches: find passwords leaked online (Have I Been Pwned)']],
+  ['3.18.0', ['Change your vault passphrase', 'Passphrase strength meter']],
+  ['3.17.0', ['Lockout after repeated wrong PINs', 'vault.json backups are now encrypted', 'Passphrases are hidden while typing']],
+  ['3.16.0', ['Master PIN is stored hashed and can be 6–12 digits', 'Vault encryption is offered on first open']],
+];
+function versionGt(a, b) {
+  const x = a.split('.').map(Number), y = b.split('.').map(Number);
+  for (let i = 0; i < Math.max(x.length, y.length); i++) {
+    if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0);
+  }
+  return false;
+}
+function showWhatsNew(from) {
+  const items = CHANGELOG.filter(([v]) => versionGt(v, from));
+  if (!items.length) { dismissWhatsNew(); return; }
+  document.getElementById('whatsNewList').innerHTML = items.map(([v, notes]) =>
+    `<div class="wn-ver">v${escHtml(v)}</div><ul class="wn-list">${notes.map(n => `<li>${escHtml(n)}</li>`).join('')}</ul>`).join('');
+  document.getElementById('whatsNewModal').style.display = 'flex';
+}
+function dismissWhatsNew() {
+  document.getElementById('whatsNewModal').style.display = 'none';
+  chromeRemove('whats_new_from');
+  try { chrome.action.setBadgeText({ text: '' }); } catch {}
 }
 
 // ── SECRET PROMPT — masked replacement for window.prompt ─────────

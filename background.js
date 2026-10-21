@@ -94,6 +94,21 @@ function fillChosenAccount(entry, tabId, tabUrl, settings, attempts) {
   }).catch(() => {});
 }
 
+// ── WHAT'S NEW — after an update, badge the icon until the popup shows the changelog ──
+function showNewBadge() {
+  chrome.action.setBadgeText({ text: 'NEW' });
+  chrome.action.setBadgeBackgroundColor({ color: '#00b4ff' });
+}
+chrome.runtime.onInstalled.addListener(({ reason, previousVersion }) => {
+  if (reason !== 'update' || !previousVersion || previousVersion === chrome.runtime.getManifest().version) return;
+  chrome.storage.local.set({ whats_new_from: previousVersion });
+  showNewBadge();
+});
+// Badge text doesn't survive a browser restart — restore it while unseen
+chrome.runtime.onStartup.addListener(() => {
+  chrome.storage.local.get('whats_new_from', r => { if (r.whats_new_from) showNewBadge(); });
+});
+
 // ── AUTO-LOCK — clear the unlocked session even while the popup is closed ──
 // autoLockMin: PIN grace + cloud key (idle). vaultLockMin: local-vault key, counted
 // from unlock; 0 = keep until Chrome closes, so auto-fill keeps working.
