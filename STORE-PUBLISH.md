@@ -53,6 +53,12 @@ Password Vault is a developer-focused password manager for Chrome.
 • Password health scan, plus an on-demand breach check (Have I Been Pwned,
   k-anonymity: only a 5-character hash prefix is sent)
 • Encrypted vault.json backups
+• Stops auto-filling a saved password that keeps failing (e.g. expired)
+  and offers to update it when you log in with the new one
+• Password history: the last 5 passwords of each login, restorable
+• Right-click: fill a login or generate a strong password into a field
+• Toolbar badge shows how many logins are saved for the current site
+• Ignore sites where you never want auto-fill or save prompts
 
 Your data stays on your device unless you enable sync.
 ```
