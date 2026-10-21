@@ -12,6 +12,8 @@ const DEFAULT_FOLDERS = [];
 
 // ── INIT ───────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
+  // Version comes from manifest.json so it always matches the build
+  document.querySelectorAll('.app-version').forEach(el => { el.textContent = chrome.runtime.getManifest().version; });
   await loadData();
   await loadUnlockState();
   // Migrate: drop legacy drag-order
