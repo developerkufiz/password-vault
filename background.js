@@ -95,17 +95,21 @@ function fillChosenAccount(entry, tabId, tabUrl, settings, attempts) {
 }
 
 // ── AUTO-LOCK — clear the unlocked session even while the popup is closed ──
+// autoLockMin: PIN grace + cloud key (idle). vaultLockMin: local-vault key, counted
+// from unlock; 0 = keep until Chrome closes, so auto-fill keeps working.
 chrome.alarms.create('pv-autolock', { periodInMinutes: 1 });
 chrome.alarms.onAlarm.addListener(a => {
   if (a.name !== 'pv-autolock') return;
-  chrome.storage.session.get('pv_unlock', s => {
-    const at = s && s.pv_unlock && s.pv_unlock.at;
-    if (!at) return;
+  chrome.storage.session.get(['pv_unlock', 'pv_vault_at'], s => {
     chrome.storage.local.get('settings', r => {
-      const mins = (r.settings || {}).autoLockMin;
-      if (!mins || mins <= 0) return;
-      if (Date.now() - at >= mins * 60000) {
-        chrome.storage.session.remove(['pv_unlock', 'cloud_encKey', 'pv_datakey']);
+      const st  = r.settings || {};
+      const now = Date.now();
+      const at  = s.pv_unlock && s.pv_unlock.at;
+      if (at && st.autoLockMin > 0 && now - at >= st.autoLockMin * 60000) {
+        chrome.storage.session.remove(['pv_unlock', 'cloud_encKey']);
+      }
+      if (s.pv_vault_at && st.vaultLockMin > 0 && now - s.pv_vault_at >= st.vaultLockMin * 60000) {
+        chrome.storage.session.remove(['pv_datakey', 'pv_vault_at']);
       }
     });
   });

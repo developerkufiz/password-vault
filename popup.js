@@ -148,7 +148,11 @@ function bindEvents() {
     const v = Math.max(0, Math.min(120, parseInt(e.target.value) || 0));
     e.target.value = v; saveSetting('autoLockMin', v);
   });
-  document.getElementById('lockNowBtn').addEventListener('click', () => lockNow());
+  document.getElementById('vaultLockInput')?.addEventListener('change', e => {
+    const v = Math.max(0, Math.min(1440, parseInt(e.target.value) || 0));
+    e.target.value = v; saveSetting('vaultLockMin', v);
+  });
+  document.getElementById('lockNowBtn').addEventListener('click', () => lockNow({ vault: true }));
   document.getElementById('healthScanBtn').addEventListener('click', () => gatePin(() => renderHealthReport()));
   document.getElementById('breachScanBtn').addEventListener('click', () => gatePin(checkBreaches));
   document.getElementById('healthReport').addEventListener('click', e => {
@@ -476,9 +480,9 @@ function lockNow(opts = {}) {
   const ep = document.getElementById('editPassword');
   if (ep && ep.type === 'text') { ep.type = 'password'; updatePinEyeIcon(); }
   if (window.Cloud && Cloud.lock && settings.lockCloud !== false) Cloud.lock();
-  if (encLocalOn()) {
+  if (encLocalOn() && opts.vault) {
     _dataKey = null;
-    try { chrome.storage.session.remove('pv_datakey'); } catch {}
+    try { chrome.storage.session.remove(['pv_datakey', 'pv_vault_at']); } catch {}
     entries = [];
     closeEditModal();
     renderVault();
@@ -1397,7 +1401,7 @@ async function aesDecrypt(key, rec) {
 async function stashDataKey() {
   try {
     const raw = await crypto.subtle.exportKey('raw', _dataKey);
-    await chrome.storage.session.set({ pv_datakey: _kb64e(raw) });
+    await chrome.storage.session.set({ pv_datakey: _kb64e(raw), pv_vault_at: Date.now() });
   } catch {}
 }
 async function loadStashedDataKey() {
@@ -1509,6 +1513,10 @@ function applySettings() {
   if (encToggle) encToggle.checked = encLocalOn();
   const encPassRow = document.getElementById('encPassRow');
   if (encPassRow) encPassRow.style.display = encLocalOn() ? 'flex' : 'none';
+  const vaultLockRow = document.getElementById('vaultLockRow');
+  if (vaultLockRow) vaultLockRow.style.display = encLocalOn() ? 'flex' : 'none';
+  const vli = document.getElementById('vaultLockInput');
+  if (vli) vli.value = settings.vaultLockMin || 0;
   if (!hasPIN) {
     const inp = document.getElementById('masterPinInput');
     if (inp) { inp.value = ''; inp.type = 'password'; }

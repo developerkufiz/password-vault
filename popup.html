@@ -819,6 +819,13 @@
     <div class="setting-info"><div class="setting-name">Encrypt local vault</div><div class="setting-desc">Store passwords as ciphertext on this device, unlocked by a passphrase. Downloads a backup first. Auto-fill works only while unlocked.</div></div>
     <label class="toggle"><input type="checkbox" id="toggleEncLocal"><span class="slider"></span></label>
   </div>
+  <div class="setting-row" id="vaultLockRow" style="display:none">
+    <div class="setting-info"><div class="setting-name">Vault lock</div><div class="setting-desc">Lock the encrypted vault N minutes after unlocking. Auto-fill needs it unlocked (0 = when Chrome closes)</div></div>
+    <div class="attempts-wrap">
+      <input type="number" id="vaultLockInput" min="0" max="1440" value="0">
+      <span class="attempts-unit">min</span>
+    </div>
+  </div>
   <div class="setting-row" id="encPassRow" style="display:none">
     <div class="setting-info"><div class="setting-name">Vault passphrase</div><div class="setting-desc">Re-encrypt the local vault with a new passphrase. Old exports still need the old one.</div></div>
     <button class="btn btn-sm" id="changeEncPassBtn" style="font-size:9px;padding:5px 9px;flex-shrink:0">Change</button>

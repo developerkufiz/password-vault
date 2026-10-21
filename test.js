@@ -38,5 +38,31 @@ eval(['_tenc', '_tdec', '_kb64e', '_kb64d'].map(line).concat(
   assert.strictEqual(sentUrl, 'https://api.pwnedpasswords.com/range/5BAA6');
   assert.strictEqual(await pwnedCount('not-in-list-xyz'), 0);
 
+  // Background auto-lock: PIN idle must NOT drop the vault key (auto-fill needs it); vault timer does
+  const runAlarm = async (session, settings) => {
+    let onAlarm;
+    const removed = [];
+    const noop = new Proxy(function () {}, { get: () => noop, apply: () => {} });
+    const stub = {
+      ...Object.fromEntries(['tabs', 'commands', 'runtime'].map(k => [k, noop])),
+      alarms: { create() {}, onAlarm: { addListener: f => { onAlarm = f; } } },
+      storage: {
+        session: { get: (k, cb) => cb(session), remove: k => removed.push(...k) },
+        local: { get: (k, cb) => cb({ settings }) },
+      },
+    };
+    require('vm').runInNewContext(require('fs').readFileSync(__dirname + '/background.js', 'utf8'), { chrome: stub, console, URL, atob, btoa, crypto, TextDecoder, setTimeout });
+    onAlarm({ name: 'pv-autolock' });
+    await new Promise(r => setImmediate(r));
+    return removed;
+  };
+  const old = Date.now() - 10 * 60000;
+  let r = await runAlarm({ pv_unlock: { at: old }, pv_vault_at: old }, { autoLockMin: 5, vaultLockMin: 0 });
+  assert(r.includes('pv_unlock') && !r.includes('pv_datakey'), 'PIN idle dropped vault key: ' + r);
+  r = await runAlarm({ pv_unlock: { at: old }, pv_vault_at: old }, { autoLockMin: 5, vaultLockMin: 5 });
+  assert(r.includes('pv_datakey'), 'vault timer did not lock');
+  r = await runAlarm({ pv_vault_at: Date.now() }, { autoLockMin: 5, vaultLockMin: 5 });
+  assert(!r.includes('pv_datakey'), 'vault locked too early');
+
   console.log('ok');
 })().catch(e => { console.error(e); process.exit(1); });

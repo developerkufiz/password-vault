@@ -272,6 +272,7 @@ When you copy a password or a 2FA code, Password Vault clears it from the clipbo
 
 | Version | Changes |
 |---|---|
+| 3.19.1 | Auto-fill keeps working after the PIN auto-locks: the encrypted vault stays unlocked until Chrome closes, or after a "Vault lock" timer you choose. |
 | 3.19 | Breach check against Have I Been Pwned (k-anonymity, on demand). |
 | 3.18 | Change vault passphrase; passphrase strength meter; tests run on every push. |
 | 3.17 | Masked passphrase prompts, wrong-PIN throttle, encrypted `vault.json` export. |
