@@ -12,6 +12,8 @@ function withDefaults(settings) { return { ...DEFAULT_SETTINGS, ...(settings || 
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (changeInfo.status !== 'complete' || !tab.url) return;
   updateBadge(tabId, tab.url);
+  // A submitted auto-filled login that moved on to a different page worked
+  getPending(p => { if (p[tabId] && urlKey(tab.url) !== p[tabId].key) resolveLogin(tabId, true); });
   if (tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://')) return;
 
   chrome.storage.local.get(['settings','attempts'], result => {
@@ -23,7 +25,12 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
 
     const key = urlKey(tab.url);
     const rec = attempts[key] || { count: 0 };
-    if (rec.count >= max) return;
+    if (isPaused(rec, max)) {
+      if (wrongPwPaused(rec) && entries.some(e => urlMatches(e.url, tab.url))) {
+        setTimeout(() => chrome.tabs.sendMessage(tabId, { action: 'showToast', mode: 'wrongpw' }).catch(() => {}), 900);
+      }
+      return;
+    }
 
     // All eligible matches — per-entry autofill override (null = use global)
     const eligible = entries.filter(e => {
@@ -86,7 +93,7 @@ function fillChosenAccount(entry, tabId, tabUrl, settings, attempts) {
   const max = settings.maxAttempts || 5;
   const key = urlKey(tabUrl || entry.url);
   const rec = attempts[key] || { count: 0 };
-  if (rec.count >= max) return;
+  if (isPaused(rec, max)) return;
   sendAutofill(tabId, entry, settings, key, max);
 }
 
@@ -179,7 +186,7 @@ function fillTab(tab) {
       const max      = settings.maxAttempts || 5;
 
       const key = urlKey(tab.url);
-      if ((attempts[key] || { count: 0 }).count >= max) {
+      if (isPaused(attempts[key] || { count: 0 }, max)) {
         console.warn('[PWD Vault] shortcut: page is locked out');
         return;
       }
@@ -238,7 +245,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
       const key = urlKey(msg.url);
       const rec = attempts[key] || { count: 0 };
-      if (rec.count >= max) {
+      if (isPaused(rec, max)) {
         sendResponse({ match: null, locked: true, count: rec.count, maxAttempts: max });
         return;
       }
@@ -251,6 +258,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
   // ── reportAttempt — auto-fill history (single source of truth) ───
   if (msg.action === 'reportAttempt') {
+    // Back on the page after submitting a filled login: form again = wrong password, no form = logged in
+    if (sender.tab) getPending(p => {
+      const rec = p[sender.tab.id];
+      if (rec && rec.key === msg.urlKey) resolveLogin(sender.tab.id, !!msg.noForm);
+    });
+    if (msg.noForm) return;
     chrome.storage.local.get(['attempts','settings','vault'], result => {
       const enc      = !!(result.settings && result.settings.encLocal && result.settings.encLocal.on);
       const attempts = result.attempts || {};
@@ -273,10 +286,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         }
       }
 
-      // Update lockout counter
-      if (msg.success) {
-        delete attempts[key];
-      } else {
+      // Update lockout counter. A successful *fill* doesn't reset it — only a
+      // login that actually worked does (resolveLogin), so a wrong saved password can't loop.
+      if (!msg.success) {
         const rec  = attempts[key] || { count: 0 };
         rec.count  = (rec.count || 0) + 1;
         rec.lastAt = Date.now();
@@ -298,6 +310,16 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       }
     });
     return true;
+  }
+
+  // ── loginSubmitted / loginResult — outcome of an auto-filled login ──
+  if (msg.action === 'loginSubmitted' && sender.tab) {
+    getPending(p => { p[sender.tab.id] = { key: msg.urlKey, at: Date.now() }; setPending(p); });
+    return;
+  }
+  if (msg.action === 'loginResult' && sender.tab) {
+    getPending(p => { const rec = p[sender.tab.id]; if (rec && rec.key === msg.urlKey) resolveLogin(sender.tab.id, !!msg.success); });
+    return;
   }
 
   // ── manualLoginSuccess — manual login history (capture watcher) ──
@@ -330,6 +352,39 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 });
 
 // ── HELPERS ───────────────────────────────────────────────────────
+// ── LOGIN OUTCOME ─────────────────────────────────────────────────
+// A tab that submitted an auto-filled login stays "pending" (storage.session, survives
+// the service worker sleeping) until we learn whether it worked. Two wrong results in
+// a row pause auto-fill for that page — cleared by a working login, "Reset" in the
+// popup, or saving a new password.
+const WRONG_PW_LIMIT = 2;
+function getPending(cb) { chrome.storage.session.get('pv_pending_login', r => cb((r && r.pv_pending_login) || {})); }
+function setPending(p)  { chrome.storage.session.set({ pv_pending_login: p }); }
+function wrongPwPaused(rec) { return (rec.wrongPw || 0) >= WRONG_PW_LIMIT; }
+function isPaused(rec, max) { return (rec.count || 0) >= max || wrongPwPaused(rec); }
+
+function resolveLogin(tabId, success) {
+  getPending(p => {
+    const rec = p[tabId];
+    if (!rec) return;
+    delete p[tabId];
+    setPending(p);
+    if (Date.now() - rec.at > 120000) return;   // too old to say anything about this login
+    chrome.storage.local.get('attempts', r => {
+      const attempts = r.attempts || {};
+      if (success) delete attempts[rec.key];
+      else {
+        const a = attempts[rec.key] || { count: 0 };
+        a.wrongPw = (a.wrongPw || 0) + 1;
+        a.lastAt  = Date.now();
+        attempts[rec.key] = a;
+        if (wrongPwPaused(a)) chrome.tabs.sendMessage(tabId, { action: 'showToast', mode: 'wrongpw' }).catch(() => {});
+      }
+      chrome.storage.local.set({ attempts });
+    });
+  });
+}
+
 function urlKey(url) {
   try { const u = new URL(url); return u.origin + u.pathname; }
   catch { return url; }

@@ -5,6 +5,7 @@ let _snapshot    = null;
 let _watching    = false;
 let _watchTimer  = null;
 let _autoFilling = false; // flag: suppress capture during auto-fill
+let _filled      = null;  // { urlKey, password } of the last auto-fill — to judge whether that login worked
 
 // ── INIT ───────────────────────────────────────────────────────────
 (function init() {
@@ -60,7 +61,10 @@ function attachCapture() {
 }
 
 // ── SUBMIT HANDLERS ────────────────────────────────────────────────
-function onAnyButtonClick() {
+function onAnyButtonClick(e) {
+  // Only real submit buttons count as "trying the login" — not show-password toggles etc.
+  const btn = e && e.currentTarget;
+  if (btn && (btn.type === 'submit' || btn === findSubmitButton())) watchFilledLogin();
   if (_autoFilling) return; // skip — auto-fill already handles history
   const pf = document.querySelector('input[type=password]');
   if (!pf || !pf.value) return;
@@ -70,12 +74,35 @@ function onAnyButtonClick() {
 }
 
 function onFormSubmit() {
+  watchFilledLogin();
   if (_autoFilling) return;
   const pf = document.querySelector('input[type=password]');
   if (!pf || !pf.value) return;
   const uf = findUsernameAnywhere();
   if (!uf || !uf.value) return;
   doSnapshot(uf, pf);
+}
+
+// ── FILLED-LOGIN OUTCOME ──────────────────────────────────────────
+// Submitting the auto-filled password = trying the saved login. Success if the
+// login form goes away or the URL changes within 8s; still there = wrong password.
+// A full page reload ends this watcher — background then judges by the next page.
+function watchFilledLogin() {
+  const pf = document.querySelector('input[type=password]');
+  if (!_filled || !pf || pf.value !== _filled.password) return;
+  const key = _filled.urlKey;
+  _filled = null;
+  chrome.runtime.sendMessage({ action: 'loginSubmitted', urlKey: key });
+  const start = location.href;
+  let n = 0;
+  const t = setInterval(() => {
+    const formGone = ![...document.querySelectorAll('input[type=password]')].some(isVisible);
+    const success  = formGone || location.href !== start;
+    if (success || ++n >= 16) {
+      clearInterval(t);
+      chrome.runtime.sendMessage({ action: 'loginResult', urlKey: key, success });
+    }
+  }, 500);
 }
 
 // ── SNAPSHOT (manual logins only) ─────────────────────────────────
@@ -196,6 +223,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       showPageToast('generated');
     }
   }
+  if (msg.action === 'showToast') showPageToast(msg.mode);
   if (msg.action === 'getCaptured')  { sendResponse({ captured: _snapshot }); }
   if (msg.action === 'clearCaptured') {
     _snapshot = null;
@@ -344,6 +372,7 @@ function injectCredentials(username, password, selectors, autosubmit, urlKey, ex
         showPageToast('fail');
       }
       // noLoginForm = already logged in, don't show anything
+      else if (urlKey) chrome.runtime.sendMessage({ action: 'reportAttempt', urlKey, noForm: true });
       return;
     }
     fillField(uf, username);
@@ -357,6 +386,7 @@ function injectCredentials(username, password, selectors, autosubmit, urlKey, ex
     // Small delay before checking value — React/Vue update .value asynchronously
     setTimeout(() => {
       const ok = (!uf || uf.value === username) && (!pf || pf.value === password);
+      if (ok && pf) _filled = { urlKey, password };
       if (urlKey) chrome.runtime.sendMessage({ action: 'reportAttempt', urlKey, success: ok });
       showPageToast(ok ? 'auto' : 'fail');
       if (ok && autosubmit) setTimeout(() => clickSubmit(selectors, pf, uf), 400);
@@ -517,6 +547,7 @@ function showPageToast(mode, count, max) {
     fail:  { t:'✕ PWD VAULT — FILL FAILED',               c:'#ff4060', b:'rgba(255,64,96,.4)' },
     locked:{ t:`🔒 PWD VAULT — LOCKED (${count}/${max})`, c:'#ff4060', b:'rgba(255,64,96,.4)' },
     generated:{ t:'🔑 PWD VAULT — PASSWORD GENERATED · SAVED WHEN YOU SUBMIT', c:'#00ffe7', b:'rgba(0,255,231,.4)' },
+    wrongpw:{ t:'⚠ PWD VAULT — SAVED PASSWORD MAY BE WRONG · AUTO-FILL PAUSED', c:'#ffb020', b:'rgba(255,176,32,.4)', ms:7000 },
   };
   const m = M[mode] || M.manual;
   const d = document.createElement('div');
@@ -525,5 +556,5 @@ function showPageToast(mode, count, max) {
   d.textContent = m.t;
   document.body.appendChild(d);
   requestAnimationFrame(() => { d.style.opacity='1'; d.style.transform='translateY(0)'; });
-  setTimeout(() => { d.style.opacity='0'; d.style.transform='translateY(-8px)'; setTimeout(()=>d.remove(),400); }, 3000);
+  setTimeout(() => { d.style.opacity='0'; d.style.transform='translateY(-8px)'; setTimeout(()=>d.remove(),400); }, m.ms || 3000);
 }

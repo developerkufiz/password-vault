@@ -102,6 +102,37 @@ eval(['_tenc', '_tdec', '_kb64e', '_kb64d'].map(line).concat(
   await runBadge({ vault }, 'https://c.test/');
   assert.deepStrictEqual(badges, ['2', 'NEW', '']);
 
+  // Wrong-password guard: filled login that keeps failing gets paused; a working login clears it
+  const mem = () => { const d = {}; return { d,
+    get: (k, cb) => { const o = {}; [].concat(k).forEach(x => { if (x in d) o[x] = JSON.parse(JSON.stringify(d[x])); }); cb && cb(o); },
+    set: (o, cb) => { Object.assign(d, JSON.parse(JSON.stringify(o))); cb && cb(); }, remove: k => [].concat(k).forEach(x => delete d[x]) }; };
+  const guard = () => {
+    const local = mem(), session = mem(), toasts = [], L = {};
+    const on = name => ({ addListener: f => { L[name] = f; } });
+    loadBackground({
+      storage: { local, session, onChanged: noop },
+      runtime: orNoop({ onMessage: on('msg') }),
+      tabs: orNoop({ onUpdated: on('upd'), sendMessage: (id, m) => { if (m.action === 'showToast') toasts.push(m.mode); return Promise.resolve(); } }),
+    });
+    const send = (m, url = 'https://s.test/login') => L.msg(m, { tab: { id: 7, url } }, () => {});
+    const load = url => L.upd(7, { status: 'complete' }, { id: 7, url });
+    return { local, send, load, toasts, wrong: () => (local.d.attempts || {})['https://s.test/login'] };
+  };
+  const K = 'https://s.test/login';
+  let g = guard();
+  g.send({ action: 'loginSubmitted', urlKey: K }); g.send({ action: 'loginResult', urlKey: K, success: false });
+  assert.strictEqual(g.wrong().wrongPw, 1); assert.deepStrictEqual(g.toasts, []);
+  g.send({ action: 'loginSubmitted', urlKey: K });                       // full reload case:
+  g.send({ action: 'reportAttempt', urlKey: K, success: true });         // login form is back on the page
+  assert.strictEqual(g.wrong().wrongPw, 2); assert.deepStrictEqual(g.toasts, ['wrongpw']);
+  g.send({ action: 'reportAttempt', urlKey: K, success: true });         // a successful *fill* must not unpause
+  assert.strictEqual(g.wrong().wrongPw, 2);
+  g.send({ action: 'loginSubmitted', urlKey: K }); g.load('https://s.test/dashboard');   // moved on = logged in
+  assert.strictEqual(g.wrong(), undefined);
+  g = guard();
+  g.send({ action: 'loginSubmitted', urlKey: K }); g.send({ action: 'reportAttempt', urlKey: K, noForm: true });
+  assert.strictEqual(g.wrong(), undefined);                              // same URL, no form = logged in
+
   // Generator (shared pwgen.js): length + every character class
   const { generatePassword } = loadBackground({});
   const pw = generatePassword(20);

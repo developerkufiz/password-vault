@@ -664,10 +664,14 @@ function checkPendingCapture() {
 
 function showCaptureBanner(captured) {
   if (!settings.capture) return;
-  const exists = entries.some(e => urlMatches(e.url, captured.url) && e.username === captured.username);
-  if (exists) { chrome.storage.local.remove('__pwdm_pending'); return; }
+  const same = entries.find(e => urlMatches(e.url, captured.url) && e.username === captured.username);
+  if (same && same.password === captured.password) { chrome.storage.local.remove('__pwdm_pending'); return; }
 
-  pendingCapture = captured;
+  // Same site + username but a different password (e.g. after a reset) = update, not a duplicate
+  pendingCapture = { ...captured, updateId: same ? same.id : null };
+  document.querySelector('#captureBanner .capture-title').textContent =
+    same ? '🔑 Password Changed — Update Saved Login?' : '⚡ Login Detected — Save Credentials?';
+  document.getElementById('captureSaveBtn').textContent = same ? '✓ Update' : '✓ Save';
 
   // URL
   document.getElementById('captureUrl').textContent = captured.url || '';
@@ -741,6 +745,17 @@ function showCaptureBanner(captured) {
 function saveCapture() {
   if (!pendingCapture) return;
   const c = pendingCapture;
+  const target = c.updateId && entries.find(e => e.id === c.updateId);
+  if (target) {
+    Object.assign(target, { password: c.password, strength: getStrengthLevel(c.password), updated: new Date().toISOString() });
+    clearAttemptsFor(target.url, c.url);
+    persist(); renderVault(); renderStats();
+    chrome.storage.local.remove('__pwdm_pending');
+    pendingCapture = null;
+    document.getElementById('captureBanner').classList.remove('show');
+    showToast('✓ Saved password updated');
+    return;
+  }
   entries.push({
     id:          Date.now().toString(36) + Math.random().toString(36).slice(2),
     label:       extractDomain(c.url),
@@ -876,6 +891,7 @@ function saveEdit() {
   const idx = entries.findIndex(e => e.id === id);
   if (idx < 0) return;
   const pass  = document.getElementById('editPassword').value;
+  if (pass !== entries[idx].password) clearAttemptsFor(entries[idx].url, document.getElementById('editUrl').value.trim());
   const extra = collectExtraFields('editExtraList');
   const afIndividual = document.getElementById('editAutofillModeBtn')?.classList.contains('individual');
   const asIndividual = document.getElementById('editAutosubmitModeBtn')?.classList.contains('individual');
@@ -1201,22 +1217,30 @@ function triggerAutofill(id) {
 
 // ── LOCKOUT ────────────────────────────────────────────────────────
 function urlKey(url) { try { const u=new URL(url); return u.origin+u.pathname; } catch { return url; } }
-function isLocked(url)        { const r=attempts[urlKey(url)]; return r ? r.count >= settings.maxAttempts : false; }
+function isLocked(url)        { const r=attempts[urlKey(url)]; return r ? (r.count || 0) >= settings.maxAttempts || (r.wrongPw || 0) >= 2 : false; }
 function getAttemptCount(url) { return attempts[urlKey(url)]?.count || 0; }
+// New password saved for a login: drop its lockout / wrong-password pause
+function clearAttemptsFor(...urls) {
+  urls.filter(Boolean).forEach(u => delete attempts[urlKey(u)]);
+  chrome.storage.local.set({ attempts }); renderLockoutList();
+}
 function unlockEntry(key)     { delete attempts[key]; chrome.storage.local.set({ attempts }); renderLockoutList(); renderVault(); showToast('Lockout cleared'); }
 
 function renderLockoutList() {
   const list   = document.getElementById('lockoutList');
   const max    = settings.maxAttempts;
-  const active = Object.entries(attempts).filter(([,r]) => r.count > 0);
+  const active = Object.entries(attempts).filter(([,r]) => r.count > 0 || r.wrongPw > 0);
   if (!active.length) { list.innerHTML = '<div class="lockout-empty">No lockouts active</div>'; return; }
   list.innerHTML = active.map(([key, rec]) => {
-    const locked  = rec.count >= max;
-    const warning = !locked && rec.count >= Math.ceil(max * 0.6);
+    const wrongPw = (rec.wrongPw || 0) >= 2;
+    const locked  = (rec.count || 0) >= max || wrongPw;
+    const warning = !locked && ((rec.count || 0) >= Math.ceil(max * 0.6) || rec.wrongPw > 0);
     const lbl     = entries.find(e => urlKey(e.url) === key)?.label || key;
+    const meta    = wrongPw ? '⚠ Saved password may be wrong — auto-fill paused. Updating the password resumes it (or Reset).'
+                  : `${locked ? '🔒 LOCKED — ' : ''}${rec.count || 0}/${max} attempts${rec.wrongPw ? ` · ${rec.wrongPw} failed login` : ''}`;
     return `<div class="lockout-row ${locked?'locked':warning?'warning':''}">
       <div class="lockout-dot"></div>
-      <div class="lockout-info"><div class="lockout-domain">${escHtml(lbl)}</div><div class="lockout-meta">${locked?'🔒 LOCKED — ':''}${rec.count}/${max} attempts</div></div>
+      <div class="lockout-info"><div class="lockout-domain">${escHtml(lbl)}</div><div class="lockout-meta">${escHtml(meta)}</div></div>
       <button class="btn-unlock" data-unlock="${encodeURIComponent(key)}">Reset</button>
     </div>`;
   }).join('');
@@ -1917,6 +1941,7 @@ async function confirmPin() {
 // Newest first. Add an entry with every release; after an update the popup
 // shows the entries newer than the version the user updated from.
 const CHANGELOG = [
+  ['3.22.0', ['Stops auto-filling a saved password that keeps failing (e.g. expired) and tells you on the page', 'Logging in with a new password offers to update the saved login instead of adding a duplicate']],
   ['3.21.0', ['Toolbar icon shows how many logins are saved for the page', 'Right-click a page: Fill saved login, or Generate strong password in a field']],
   ['3.20.1', ['Cloud Sync keeps synced passwords encrypted on devices that use vault encryption']],
   ['3.20.0', ["What's new: see what changed after each update (also in Config › About)"]],
