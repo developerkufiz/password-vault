@@ -514,14 +514,16 @@ function prefillUrl() {
   if (currentTab?.url) document.getElementById('addUrl').value = currentTab.url;
 }
 
-function persist() {
+// Save entries on this device only, encrypted when local encryption is on.
+// Cloud sync merges call this directly so a pull doesn't trigger another push.
+function saveLocal() {
   if (encLocalOn()) {
     if (_dataKey) aesEncrypt(_dataKey, entries).then(rec => chrome.storage.local.set({ vault_enc: rec }));
   } else {
     chrome.storage.local.set({ vault: entries });
   }
-  if (window.Cloud) Cloud.schedulePush();
 }
+function persist() { saveLocal(); if (window.Cloud) Cloud.schedulePush(); }
 function persistFolders() { chrome.storage.local.set({ folders }); if (window.Cloud) Cloud.schedulePush(); }
 
 // ── FOLDERS ────────────────────────────────────────────────────────
@@ -1907,6 +1909,7 @@ async function confirmPin() {
 // Newest first. Add an entry with every release; after an update the popup
 // shows the entries newer than the version the user updated from.
 const CHANGELOG = [
+  ['3.20.1', ['Cloud Sync keeps synced passwords encrypted on devices that use vault encryption']],
   ['3.20.0', ["What's new: see what changed after each update (also in Config › About)"]],
   ['3.19.1', ['Auto-fill keeps working after the PIN auto-locks', 'New Vault lock timer in Config › Security']],
   ['3.19.0', ['Check breaches: find passwords leaked online (Have I Been Pwned)']],

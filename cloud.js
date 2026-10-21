@@ -152,7 +152,7 @@ window.Cloud = (function () {
     folders.push(...fMap.values());
 
     saveTombstones();
-    chrome.storage.local.set({ vault: entries, folders });
+    saveLocal(); chrome.storage.local.set({ folders });   // saveLocal: respects local encryption
   }
 
   // ── pull / push ──────────────────────────────────────────────────
@@ -235,7 +235,7 @@ window.Cloud = (function () {
     if (mode === 'replace') { entries.length = 0; folders.length = 0; tombstones = []; saveTombstones(); }
     if (mode !== 'skip') mergeIntoLocal(pending.remote);
     pending = null;
-    chrome.storage.local.set({ vault: entries, folders });
+    saveLocal(); chrome.storage.local.set({ folders });   // saveLocal: respects local encryption
     onChange();
     await push();
     updateStatusUI();
